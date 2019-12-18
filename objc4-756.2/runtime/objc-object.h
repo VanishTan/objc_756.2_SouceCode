@@ -159,6 +159,7 @@ objc_object::ISA()
     }
     return (Class)isa.bits;
 #else
+    //这里是返回类对象需要用 isa 的指针 & ISA_MASK
     return (Class)(isa.bits & ISA_MASK);
 #endif
 }
@@ -217,7 +218,7 @@ objc_object::initIsa(Class cls, bool nonpointer, bool hasCxxDtor)
 
 #if SUPPORT_INDEXED_ISA
         assert(cls->classArrayIndex() > 0);
-        newisa.bits = ISA_INDEX_MAGIC_VALUE;
+        newisa.bits = ISA_INDEX_MAGIC_VALUE; ////define ISA_INDEX_MAGIC_VALUE  0x001C0001
         // isa.magic is part of ISA_MAGIC_VALUE
         // isa.nonpointer is part of ISA_MAGIC_VALUE
         newisa.has_cxx_dtor = hasCxxDtor;

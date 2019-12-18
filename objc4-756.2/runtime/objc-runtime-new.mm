@@ -6989,15 +6989,28 @@ _class_createInstanceFromZone(Class cls, size_t extraBytes, void *zone,
     assert(cls->isRealized());
 
     // Read class's info bits all at once for performance
+    
+    
+    //hasCxxCtor() 是判断当前 class 或者 superclass 是否有 .cxx_construct 构造方法的实现。
     bool hasCxxCtor = cls->hasCxxCtor();
+    //hasCxxDtor() 是判断判断当前 class 或者 superclass 是否有 .cxx_destruct 析构方法的实现。
     bool hasCxxDtor = cls->hasCxxDtor();
+    
+    //具体标记某个类是否支持优化的isa.
     bool fast = cls->canAllocNonpointer();
 
+    //获取类的大小 （传入额外字节的大小）
     size_t size = cls->instanceSize(extraBytes);
+    
+    //如果传入分配大小就需要修改
     if (outAllocatedSize) *outAllocatedSize = size;
 
     id obj;
     if (!zone  &&  fast) {
+        /**
+         *  void    *calloc(size_t __count, size_t __size)
+         *  在内存的动态存储区中分配 __count 个长度为 __size 的连续空间
+         */
         obj = (id)calloc(1, size);
         if (!obj) return nil;
         obj->initInstanceIsa(cls, hasCxxDtor);

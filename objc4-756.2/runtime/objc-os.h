@@ -43,6 +43,22 @@
 #endif
 
 static inline uint32_t word_align(uint32_t x) {
+    //字节对齐
+    /**
+     *  假如： x = 9
+     *  x + WORD_MASK = 9 + 7 = 16
+     *  WORD_MASK 二进制 ：0000 0111 = 7 （4+2+1）
+     *  ~WORD_MASK : 1111 1000
+     *  16 二进制  0001 0000
+     *   1111 1000
+     *   0001 0000
+     *
+     *   0001 0000 = 16
+     *
+     *   所以 x = 16（原始值：9） 也就是 8的倍数对齐
+     *
+     *
+     */
     return (x + WORD_MASK) & ~WORD_MASK;
 }
 static inline size_t word_align(size_t x) {
@@ -116,7 +132,10 @@ void vsyslog(int, const char *, va_list) UNAVAILABLE_ATTRIBUTE;
 #define ALWAYS_INLINE inline __attribute__((always_inline))
 #define NEVER_INLINE inline __attribute__((noinline))
 
+
+//bool(x) 为真的可能性更大
 #define fastpath(x) (__builtin_expect(bool(x), 1))
+//bool(x) 为假的可能性更大
 #define slowpath(x) (__builtin_expect(bool(x), 0))
 
 

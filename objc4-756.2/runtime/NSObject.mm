@@ -1733,15 +1733,24 @@ _objc_rootAllocWithZone(Class cls, malloc_zone_t *zone)
 // Call [cls alloc] or [cls allocWithZone:nil], with appropriate 
 // shortcutting optimizations.
 static ALWAYS_INLINE id
-callAlloc(Class cls, bool checkNil, bool allocWithZone=false)
+    callAlloc(Class cls, bool checkNil, bool allocWithZone=false)
 {
+    /**
+     *  bool(x) 为假的可能性更大 else 执行的概率会更大
+     *  #define slowpath(x) (__builtin_expect(bool(x), 0))
+     */
     if (slowpath(checkNil && !cls)) return nil;
 
 #if __OBJC2__
+    //这是判断一个类是否有自定义的 +allocWithZone 实现。
+    //hasCustomAWZ : hasCustomAllocWithZone
     if (fastpath(!cls->ISA()->hasCustomAWZ())) {
         // No alloc/allocWithZone implementation. Go straight to the allocator.
         // fixme store hasCustomAWZ in the non-meta class and 
         // add it to canAllocFast's summary
+        
+        //没有实现就进入
+        
         if (fastpath(cls->canAllocFast())) {
             // No ctors, raw isa, etc. Go straight to the metal.
             bool dtor = cls->hasCxxDtor();

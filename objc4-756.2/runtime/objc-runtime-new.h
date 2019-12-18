@@ -576,6 +576,7 @@ static_assert(FAST_IS_SWIFT_STABLE == 2, "resistance is futile");
 
 
 struct class_ro_t {
+    //类保存的所有东西，比如：属性，方法 协议等
     uint32_t flags;
     uint32_t instanceStart;
     uint32_t instanceSize;
@@ -1238,6 +1239,7 @@ struct objc_class : objc_object {
     void printCustomAWZ(bool inherited);
 
     bool instancesRequireRawIsa() {
+        //实例是否需要原始Isa
         return bits.instancesRequireRawIsa();
     }
     void setInstancesRequireRawIsa(bool inherited = false);
@@ -1245,7 +1247,8 @@ struct objc_class : objc_object {
 
     bool canAllocNonpointer() {
         assert(!isFuture());
-        return !instancesRequireRawIsa();
+        ////实例是否需要原始Isa instancesRequireRawIsa = NO
+        return !instancesRequireRawIsa();//YES
     }
     bool canAllocFast() {
         assert(!isFuture());
@@ -1445,17 +1448,21 @@ struct objc_class : objc_object {
     // May be unaligned depending on class's ivars.
     uint32_t unalignedInstanceSize() {
         assert(isRealized());
+        //MacO 的 data段的 ro 中的类所占用的大小
         return data()->ro->instanceSize;
     }
 
     // Class's ivar size rounded up to a pointer-size boundary.
     uint32_t alignedInstanceSize() {
+        //字节对齐
         return word_align(unalignedInstanceSize());
     }
 
     size_t instanceSize(size_t extraBytes) {
+        
         size_t size = alignedInstanceSize() + extraBytes;
         // CF requires all objects be at least 16 bytes.
+        //CF 最小16字节
         if (size < 16) size = 16;
         return size;
     }

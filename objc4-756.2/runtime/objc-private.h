@@ -58,6 +58,17 @@ namespace {
 
 #include "isa.h"
 
+/**
+ *  isa_t 是一个联合体
+ *  当多个数据需要共享内存或者多个数据每次只取其一时，可以利用联合体(union)，
+ *  利用union可以用相同的存储空间存储不同型别的数据类型，从而节省内存空间。
+ */
+/**
+ @code
+ 
+ @end
+ */
+
 union isa_t {
     isa_t() { }
     isa_t(uintptr_t value) : bits(value) { }
@@ -67,6 +78,21 @@ union isa_t {
 #if defined(ISA_BITFIELD)
     struct {
         ISA_BITFIELD;  // defined in isa.h
+        
+        /**
+         *
+         *   uintptr_t nonpointer        : 1;    //表示是否对isa开启指针优化 。0代表是纯isa指针，1代表除了地址外，还包含了类的一些信息、对象的引用计数等
+         *   uintptr_t has_assoc         : 1;    //关联对象标志位 是否关联过对象
+         *   uintptr_t has_cxx_dtor      : 1;    //该对象是否有C++或Objc的析构器，如果有析构函数，则需要做一些析构的逻辑处理，如果没有，则可以更快的释放对象
+         *   uintptr_t shiftcls          : 33;   //存在类指针的值，开启指针优化的情况下，arm64位中有33位来存储类的指针 MACH_VM_MAX_ADDRESS 0x1000000000
+         *   uintptr_t magic             : 6;    //判断当前对象是真的对象还是一段没有初始化的空间
+         *   uintptr_t weakly_referenced : 1;    //是否被指向或者曾经指向一个ARC的弱变量，没有弱引用的对象释放的更快                                  \
+         *   uintptr_t deallocating      : 1;    //标志对象是否正在释放内存
+         *   uintptr_t has_sidetable_rc  : 1;    //标志当对象引用计数大于10时，则s需要借用该变量存储进位
+         *   uintptr_t extra_rc          : 19    //表示该对象的引用计数值，实际上是引用计数减一。
+         *                                         例如：如果引用计数为10，那么extra_rc为9。如果引用计数大于10，则需要使用has_sidetable_rc
+         */
+        
     };
 #endif
 };
