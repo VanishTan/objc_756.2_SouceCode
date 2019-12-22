@@ -32,6 +32,7 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		2DB0651223AF034C00E53456 /* TestClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2DB0651123AF034C00E53456 /* TestClass.m */; };
 		393CEAC00DC69E3E000B69DE /* objc-references.mm in Sources */ = {isa = PBXBuildFile; fileRef = 393CEABF0DC69E3E000B69DE /* objc-references.mm */; };
 		393CEAC60DC69E67000B69DE /* objc-references.h in Headers */ = {isa = PBXBuildFile; fileRef = 393CEAC50DC69E67000B69DE /* objc-references.h */; };
 		39ABD72312F0B61800D1054C /* objc-weak.h in Headers */ = {isa = PBXBuildFile; fileRef = 39ABD71F12F0B61800D1054C /* objc-weak.h */; };
@@ -163,6 +164,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2DB0651023AF034C00E53456 /* TestClass.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TestClass.h; sourceTree = "<group>"; };
+		2DB0651123AF034C00E53456 /* TestClass.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = TestClass.m; sourceTree = "<group>"; };
 		2DC16E5123A5CFAD005452E3 /* Test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Test; sourceTree = BUILT_PRODUCTS_DIR; };
 		393CEABF0DC69E3E000B69DE /* objc-references.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = "objc-references.mm"; path = "runtime/objc-references.mm"; sourceTree = "<group>"; };
 		393CEAC50DC69E67000B69DE /* objc-references.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-references.h"; path = "runtime/objc-references.h"; sourceTree = "<group>"; };
@@ -381,6 +384,8 @@
 			isa = PBXGroup;
 			children = (
 				6F8ADBF42314D1F300E235A9 /* main.m */,
+				2DB0651023AF034C00E53456 /* TestClass.h */,
+				2DB0651123AF034C00E53456 /* TestClass.m */,
 			);
 			path = "objc-debug";
 			sourceTree = "<group>";
@@ -732,6 +737,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2DB0651223AF034C00E53456 /* TestClass.m in Sources */,
 				6F8ADBF52314D1F300E235A9 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

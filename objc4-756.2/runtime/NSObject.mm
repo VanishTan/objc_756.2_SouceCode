@@ -1749,7 +1749,9 @@ static ALWAYS_INLINE id
         // fixme store hasCustomAWZ in the non-meta class and 
         // add it to canAllocFast's summary
         
-        //没有实现就进入
+     
+        //这里是没有 alloc / allocWithZone 的实现，走的初始化器，
+        //并且 没有元类，这里说明的是不是继承 NSObject /NSProxy 的时候才会进入
         
         if (fastpath(cls->canAllocFast())) {
             // No ctors, raw isa, etc. Go straight to the metal.
