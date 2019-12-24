@@ -69,11 +69,14 @@ namespace {
  @end
  */
 
+//联合体，共用体
 union isa_t {
     isa_t() { }
     isa_t(uintptr_t value) : bits(value) { }
 
     Class cls;
+    // 8个字节 64个bit 010
+    //
     uintptr_t bits;
 #if defined(ISA_BITFIELD)
     struct {

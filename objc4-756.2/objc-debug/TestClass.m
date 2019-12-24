@@ -7,6 +7,13 @@
 
 #import "TestClass.h"
 
+
 @implementation TestClass
+- (void)testClassInstanceMethod {
+    NSLog(@"testClassInstanceMethod");
+}
++ (void)testClassClassMethod {
+    NSLog(@"testClassClassMethod");
+}
 
 @end

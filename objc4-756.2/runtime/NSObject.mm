@@ -1744,6 +1744,9 @@ static ALWAYS_INLINE id
 #if __OBJC2__
     //这是判断一个类是否有自定义的 +allocWithZone 实现。
     //hasCustomAWZ : hasCustomAllocWithZone
+    //alloc
+    // cls->ISA()->hasCustomAWZ() = false
+    
     if (fastpath(!cls->ISA()->hasCustomAWZ())) {
         // No alloc/allocWithZone implementation. Go straight to the allocator.
         // fixme store hasCustomAWZ in the non-meta class and 
@@ -1751,7 +1754,7 @@ static ALWAYS_INLINE id
         
      
         //这里是没有 alloc / allocWithZone 的实现，走的初始化器，
-        //并且 没有元类，这里说明的是不是继承 NSObject /NSProxy 的时候才会进入
+        //并且 没有元类，这里说明的是不是继承 NSObject /NSProxy 的时候才会进入 canAllocFast（）
         
         if (fastpath(cls->canAllocFast())) {
             // No ctors, raw isa, etc. Go straight to the metal.
@@ -2315,6 +2318,7 @@ void arr_init(void)
 }
 
 + (id)alloc {
+    //LLVM sel_alloc -> object_alloc
     return _objc_rootAlloc(self);
 }
 

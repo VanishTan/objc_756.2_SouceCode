@@ -6996,10 +6996,18 @@ _class_createInstanceFromZone(Class cls, size_t extraBytes, void *zone,
     //hasCxxDtor() 是判断判断当前 class 或者 superclass 是否有 .cxx_destruct 析构方法的实现。
     bool hasCxxDtor = cls->hasCxxDtor();
     
+   
+    
+    /**
+     isa : NSObject *obj = [NSObject new];
+     obj is a NSObject(class);
+     */
+    
     //具体标记某个类是否支持优化的isa.
     bool fast = cls->canAllocNonpointer();
 
     //获取类的大小 （传入额外字节的大小）
+    //16
     size_t size = cls->instanceSize(extraBytes);
     
     //如果传入分配大小就需要修改
@@ -7039,6 +7047,7 @@ _class_createInstanceFromZone(Class cls, size_t extraBytes, void *zone,
 id 
 class_createInstance(Class cls, size_t extraBytes)
 {
+    //extraBytes : 额外空间
     return _class_createInstanceFromZone(cls, extraBytes, nil);
 }
 

@@ -44,6 +44,9 @@
 
 static inline uint32_t word_align(uint32_t x) {
     //字节对齐
+    // isa ,
+    // char a; 1 //’a‘
+    // 0 1 1 1 = 2^2 + 2^1 + 2^0 = 7;
     /**
      *  假如： x = 9
      *  x + WORD_MASK = 9 + 7 = 16
@@ -134,8 +137,10 @@ void vsyslog(int, const char *, va_list) UNAVAILABLE_ATTRIBUTE;
 
 
 //bool(x) 为真的可能性更大
+//__builtin_expect(x, 1)
 #define fastpath(x) (__builtin_expect(bool(x), 1))
 //bool(x) 为假的可能性更大
+//__builtin_expect(x, 0)
 #define slowpath(x) (__builtin_expect(bool(x), 0))
 
 

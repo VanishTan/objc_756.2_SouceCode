@@ -1023,6 +1023,7 @@ public:
     }
 #endif
 
+//64中没有定义 FAST_HAS_DEFAULT_AWZ 所以 if中的代码不走
 #if FAST_HAS_DEFAULT_AWZ
     bool hasDefaultAWZ() {
         return getBit(FAST_HAS_DEFAULT_AWZ);
@@ -1035,6 +1036,7 @@ public:
     }
 #else
     bool hasDefaultAWZ() {
+        //RW_HAS_DEFAULT_AWZ    (1<<16)
         return data()->flags & RW_HAS_DEFAULT_AWZ;
     }
     void setHasDefaultAWZ() {
@@ -1449,17 +1451,21 @@ struct objc_class : objc_object {
     uint32_t unalignedInstanceSize() {
         assert(isRealized());
         //MacO 的 data段的 ro 中的类所占用的大小
+        // Person 类所占用的大小 0
+        // NSObject 根类占用的大小 8
         return data()->ro->instanceSize;
     }
 
     // Class's ivar size rounded up to a pointer-size boundary.
     uint32_t alignedInstanceSize() {
         //字节对齐
+        //8字节
         return word_align(unalignedInstanceSize());
     }
 
     size_t instanceSize(size_t extraBytes) {
         
+        //extraBytes : 0
         size_t size = alignedInstanceSize() + extraBytes;
         // CF requires all objects be at least 16 bytes.
         //CF 最小16字节

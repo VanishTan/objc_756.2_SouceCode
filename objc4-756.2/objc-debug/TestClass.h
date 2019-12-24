@@ -9,7 +9,14 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface TestClass : NSObject
+@interface TestClass : NSObject {
+    NSString *flyIvar;
+}
+
+@property (nonatomic, strong) NSString *flyProperty;
+
+- (void)testClassInstanceMethod;
++ (void)testClassClassMethod;
 
 @end
 
