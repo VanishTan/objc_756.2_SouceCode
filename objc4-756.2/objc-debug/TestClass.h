@@ -16,6 +16,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong) NSString *flyProperty;
 
 - (void)testClassInstanceMethod;
+- (void)testClassInstanceMethod_1;
+- (void)testClassInstanceMethod_2;
+- (void)testClassInstanceMethod_3;
+
 + (void)testClassClassMethod;
 
 @end

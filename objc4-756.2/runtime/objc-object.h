@@ -160,6 +160,7 @@ objc_object::ISA()
     return (Class)isa.bits;
 #else
     //这里是返回类对象需要用 isa 的指针 & ISA_MASK
+    //shiftClass
     return (Class)(isa.bits & ISA_MASK);
 #endif
 }

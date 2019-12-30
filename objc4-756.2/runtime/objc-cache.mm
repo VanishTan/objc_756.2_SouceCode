@@ -470,7 +470,10 @@ void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity)
 {
     bool freeOld = canBeFreed();
 
+    //获取旧的缓存池
     bucket_t *oldBuckets = buckets();
+    
+    //开辟新的缓存池
     bucket_t *newBuckets = allocateBuckets(newCapacity);
 
     // Cache's old contents are not propagated. 
@@ -480,8 +483,10 @@ void cache_t::reallocate(mask_t oldCapacity, mask_t newCapacity)
     assert(newCapacity > 0);
     assert((uintptr_t)(mask_t)(newCapacity-1) == newCapacity-1);
 
+    //给cache 重新赋值缓存池 _buckets，能存储的_mask = newCapacity - 1 的值，然后把当前已经缓存的方法个数置为0
     setBucketsAndMask(newBuckets, newCapacity - 1);
     
+    //如果可以释放就释放掉旧的缓存池
     if (freeOld) {
         cache_collect_free(oldBuckets, oldCapacity);
         cache_collect(false);
@@ -538,54 +543,98 @@ bucket_t * cache_t::find(SEL s, id receiver)
 
 void cache_t::expand()
 {
+    //锁
     cacheUpdateLock.assertLocked();
     
+    //获取原来缓存的最大容量
     uint32_t oldCapacity = capacity();
+    
+    //如果原来缓存的最大容量 > 0，就在原来的容量上 * 2，否则就返回 4
     uint32_t newCapacity = oldCapacity ? oldCapacity*2 : INIT_CACHE_SIZE;
 
+    //如果新容量不等于旧容量就赋值
     if ((uint32_t)(mask_t)newCapacity != newCapacity) {
         // mask overflow - can't grow further
         // fixme this wastes one bit of mask
         newCapacity = oldCapacity;
     }
 
+    //开辟
     reallocate(oldCapacity, newCapacity);
 }
 
 
 static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver)
 {
+    //加锁
     cacheUpdateLock.assertLocked();
 
     // Never cache before +initialize is done
+    //在初始化之前不需要缓存
     if (!cls->isInitialized()) return;
 
     // Make sure the entry wasn't added to the cache by some other thread 
     // before we grabbed the cacheUpdateLock.
+    //确保在获取cacheUpdateLock之前，条目没有被其他线程添加到缓存中。
+
+    
+    //如果缓存中找到了，就 return 什么也不需要干
     if (cache_getImp(cls, sel)) return;
 
+    //取出类对象中的 cache_t
     cache_t *cache = getCache(cls);
 
     // Use the cache as-is if it is less than 3/4 full
+    //如果缓存不足3/4，则按原样使用缓存
+    
+    //获取当前保存的缓存已经使用的大小，然后进行 + 1 ，因为当前需要缓存新的。
     mask_t newOccupied = cache->occupied() + 1;
+    
+    //获取当前 cache 的最大容量 _mask + 1
     mask_t capacity = cache->capacity();
+    
+    //如果是一个只读的空缓存就进入
     if (cache->isConstantEmptyCache()) {
         // Cache is read-only. Replace it.
+        //缓存是只读的。取代它
+        
+        //开辟一个缓存空间
+        //大小是 (1 << INIT_CACHE_SIZE_LOG2) -----> 4
         cache->reallocate(capacity, capacity ?: INIT_CACHE_SIZE);
     }
     else if (newOccupied <= capacity / 4 * 3) {
         // Cache is less than 3/4 full. Use it as-is.
+        //缓存小于3/4满。按原样使用它。
     }
     else {
         // Cache is too full. Expand it.
+        
+        //超出了缓存大小的 4分之3 就需要 扩容
         cache->expand();
     }
 
     // Scan for the first unused slot and insert there.
     // There is guaranteed to be an empty slot because the 
     // minimum size is 4 and we resized at 3/4 full.
+    
+    //扫描第一个未使用的插槽并插入。
+    //保证有一个空槽，因为最小尺寸是4，我们调整了3/4满的尺寸。
+    
+    //哈希去查找
     bucket_t *bucket = cache->find(sel, receiver);
-    if (bucket->sel() == 0) cache->incrementOccupied();
+    
+    if (bucket->sel() == 0) {
+        // 如果 _sel 没找到
+        /**
+         *  incrementOccupied() {
+         *    //当前已经缓存的方法总数+1；
+         *     _occupied++;
+         *  }
+         */
+        cache->incrementOccupied();
+    }
+        
+    //将当前要调用方法缓存
     bucket->set<Atomic>(sel, imp);
 }
 
