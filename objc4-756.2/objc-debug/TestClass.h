@@ -5,11 +5,11 @@
 //  Created by 谭诚 on 2019/12/22.
 //
 
-#import <Foundation/Foundation.h>
+#import "TestSuperClass.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface TestClass : NSObject {
+@interface TestClass : TestSuperClass {
     NSString *flyIvar;
 }
 

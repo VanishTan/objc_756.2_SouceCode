@@ -235,34 +235,62 @@ LExit$0:
 
 .macro CacheLookup
 	// p1 = SEL, p16 = isa
+    /* x16：是当前类
+     * [x16, #CACHE]: 当期 x16寄存器的地址偏移 CACHE 个单位 就是 cache_t
+     * #CACHE 代表 #define CACHE (2 * __SIZEOF_POINTER__)
+     * #define CLASS __SIZEOF_POINTER__ -> 8
+     * [x16, #CACHE]: 当前类偏移 2*8 就是16个字节，
+     * 在 objc_classs 的结构中 : isa  superclass cache_t .....
+     * 所以偏移16个字节就是 cache_t
+     */
 	ldp	p10, p11, [x16, #CACHE]	// p10 = buckets, p11 = occupied|mask
 #if !__LP64__
 	and	w11, w11, 0xffff	// p11 = mask
 #endif
+    //当前开始哈希查找了 取低32位 mask & sel
 	and	w12, w1, w11		// x12 = _cmd & mask
 	add	p12, p10, p12, LSL #(1+PTRSHIFT)
 		             // p12 = buckets + ((_cmd & mask) << (1+PTRSHIFT))
-
+    
+    
+    /**
+     * bucket_t {
+     *   int32 imp;
+     *   SEL sel;
+     * }
+     */
+    //取出 bucket 中的 imp 和 sel 给 p17 和 p9
 	ldp	p17, p9, [x12]		// {imp, sel} = *bucket
+    
+    //将 p9 （sel） 和当前传入 SEL _cmd 比较
 1:	cmp	p9, p1			// if (bucket->sel != _cmd)
+    //如果不相等跳转 流程 2
 	b.ne	2f			//     scan more
+    //缓存命中返回 imp
 	CacheHit $0			// call or return imp
 	
 2:	// not hit: p12 = not-hit bucket
+    //找方法列表
 	CheckMiss $0			// miss if bucket->sel == 0
+    //比较 bucket == buckets
 	cmp	p12, p10		// wrap if bucket == buckets
+    //如果相等就跳转3
 	b.eq	3f
 	ldp	p17, p9, [x12, #-BUCKET_SIZE]!	// {imp, sel} = *--bucket
 	b	1b			// loop
 
 3:	// wrap: p12 = first bucket, w11 = mask
+    // 存一份
 	add	p12, p12, w11, UXTW #(1+PTRSHIFT)
 		                        // p12 = buckets + (mask << 1+PTRSHIFT)
-
+    //当缓存被破坏时，克隆扫描循环将会丢失而不是挂起。
+    //慢速路径可能会检测到任何损坏，然后停止。
 	// Clone scanning loop to miss instead of hang when cache is corrupt.
 	// The slow path may detect any corruption and halt later.
 
 	ldp	p17, p9, [x12]		// {imp, sel} = *bucket
+
+    //此时又寻找了一次，原因是因为防止因为多线程的原因导致上一次写入没有完成 就去查找了缓存。所以在一次进行查找。
 1:	cmp	p9, p1			// if (bucket->sel != _cmd)
 	b.ne	2f			//     scan more
 	CacheHit $0			// call or return imp
@@ -302,22 +330,33 @@ _objc_debug_taggedpointer_ext_classes:
 	.fill 256, 8, 0
 #endif
 
+    //进入_objc_msgSend
 	ENTRY _objc_msgSend
+
 	UNWIND _objc_msgSend, NoFrame
 
+    //p0： 是self  cmp：比较指令
+    //这里是判断接受者是不是空
 	cmp	p0, #0			// nil check and tagged pointer check
 #if SUPPORT_TAGGED_POINTERS
+    //b.le : if 判断，如果成立就跳转 LNilOrTagged
 	b.le	LNilOrTagged		//  (MSB tagged pointer looks negative)
 #else
 	b.eq	LReturnZero
 #endif
+    //b.le : if 判断，如果成立就跳转 LNilOrTagged
 	ldr	p13, [x0]		// p13 = isa
+    // 把 p13 传给 GetClassFromIsa_p16 进行运算，结果返回class
 	GetClassFromIsa_p16 p13		// p16 = class
 LGetIsaDone:
+    //查找缓存
 	CacheLookup NORMAL		// calls imp or objc_msgSend_uncached
 
 #if SUPPORT_TAGGED_POINTERS
 LNilOrTagged:
+    // b.eq : 如果相等就跳转
+    // 结合上方的意思是：
+    //如果 如果接受者是nil 就直接返回了
 	b.eq	LReturnZero		// nil check
 
 	// tagged

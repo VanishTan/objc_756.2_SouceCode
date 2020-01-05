@@ -525,15 +525,65 @@ bucket_t * cache_t::find(SEL s, id receiver)
 {
     assert(s != 0);
 
+    //返回缓存池数组
     bucket_t *b = buckets();
+    
+    //返回当前最大缓存数 - 1
     mask_t m = mask();
+    
+    //用SEL 强转的数值 & _mask
     mask_t begin = cache_hash(s, m);
+    
+    //s :  1
+    //m :  3
+    // 0001
+    // 0011
+    //--------
+    // 0001
+    
+    //begin = 1;
     mask_t i = begin;
     do {
         if (b[i].sel() == 0  ||  b[i].sel() == s) {
             return &b[i];
         }
     } while ((i = cache_next(i, m)) != begin);
+    
+    /**
+     *  static inline mask_t cache_next(mask_t i, mask_t mask) {
+     *    return (i+1) & mask;
+     *  }
+     *
+     *  2
+     *  3
+     *  0010
+     *  0011
+     * &------
+     *  0010
+     *   i = 2
+     *
+     *   3 && 3
+     *   0011
+     *   0011
+     *   ----
+     *   0011
+     *   i = 3;
+     *
+     *   0100
+     *   0011
+     *   ------
+     *   00000
+     *
+     *   i = 0;
+     *
+     *   0101
+     *   0011
+     * &------
+     *   0001
+     *   i = 1;
+     *
+     *
+     */
 
     // hack
     Class cls = (Class)((uintptr_t)this - offsetof(objc_class, cache));
@@ -623,16 +673,17 @@ static void cache_fill_nolock(Class cls, SEL sel, IMP imp, id receiver)
     //哈希去查找
     bucket_t *bucket = cache->find(sel, receiver);
     
-    if (bucket->sel() == 0) {
-        // 如果 _sel 没找到
-        /**
-         *  incrementOccupied() {
-         *    //当前已经缓存的方法总数+1；
-         *     _occupied++;
-         *  }
-         */
+    // 如果 _sel 没找到
+    /**
+     *  incrementOccupied() {
+     *    //当前已经缓存的方法总数+1；
+     *     _occupied++;
+     *  }
+     */
+    
+    if (bucket->sel() == 0)
         cache->incrementOccupied();
-    }
+    
         
     //将当前要调用方法缓存
     bucket->set<Atomic>(sel, imp);

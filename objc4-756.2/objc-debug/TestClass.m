@@ -25,7 +25,7 @@
 
 
 + (void)testClassClassMethod {
-//    NSLog(@"testClassClassMethod");
+    NSLog(@"testClassClassMethod");
 }
 
 @end
