@@ -4944,8 +4944,17 @@ static method_t *findMethodInSortedMethodList(SEL key, const method_list_t *list
     uintptr_t keyValue = (uintptr_t)key;
     uint32_t count;
     
+    /**
+     * count ： 初始值为方法列表的个数 假设 48
+     * 1、如果 count != 0; 循环条件每次 右移一位  也就是说 除以 2;
+     * 2、 第一次进入 从一半开始找起，如果 keyValue > probeValue 那么在右边，否则在左边;
+     * 3、 第二次是从 12 开始找起，也不满足 keyValue > probeValue 的条件;
+     * 4、 第二次从 6 开始找起，满足条件 keyValue > probeValue，将初始值移动到当前 6 的后一位 也就是从 7 开始查找，然后count--, 也就是说当前 count = 5 ，然后在对 > 6 且 < 12 进行查找，也就是 7 - 11 ，count >> 1 为 2， 7+2 = 9，刚还是 7 - 11 的中心。
+     * 这就是 2分查找法，但是前提是有序数组。
+     */
+    
     for (count = list->count; count != 0; count >>= 1) {
-        probe = base + (count >> 1);
+        probe = base + (count >> 1); //从一半开始找起
         
         uintptr_t probeValue = (uintptr_t)probe->name;
         
@@ -5010,6 +5019,7 @@ getMethodNoSuper_nolock(Class cls, SEL sel)
     // fixme nil cls? 
     // fixme nil sel?
 
+    //二分查找
     for (auto mlists = cls->data()->methods.beginLists(), 
               end = cls->data()->methods.endLists(); 
          mlists != end;
@@ -5261,6 +5271,20 @@ IMP _class_lookupMethodAndLoadCache3(id obj, SEL sel, Class cls)
 *   must be converted to _objc_msgForward or _objc_msgForward_stret.
 *   If you don't want forwarding at all, use lookUpImpOrNil() instead.
 **********************************************************************/
+
+/**
+ * lookUpImpOrForward。
+ * 标准IMP查找。
+ * initialize==NO 尝试避免+初始化(但有时会失败)
+ * cache==NO 跳过乐观解锁查找(但在其他地方使用缓存)
+ * 大多数调用者应该使用initialize==YES和cache==YES。
+ * inst是cls或其子类的一个实例，如果不知道，则为nil。
+ * 如果cls是一个未初始化的元类，那么非空的inst会更快。
+ * 可能返回_objc_msgForward_impcache。用于外部使用的imp必须转换为_objc_msgForward或_objc_msgForward_stret。
+ * 如果根本不想转发，可以使用lookUpImpOrNil()。
+ */
+
+
 IMP lookUpImpOrForward(Class cls, SEL sel, id inst, 
                        bool initialize, bool cache, bool resolver)
 {
@@ -5270,6 +5294,8 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     runtimeLock.assertUnlocked();
 
     // Optimistic cache lookup
+    // 乐观的缓存查找
+    // 这里如果传入的 cache 为 YES ，就查找一次 cache, 如果 imp 存在，就直接返回了。
     if (cache) {
         imp = cache_getImp(cls, sel);
         if (imp) return imp;
@@ -5283,10 +5309,20 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     // Otherwise, a category could be added but ignored indefinitely because
     // the cache was re-filled with the old value after the cache flush on
     // behalf of the category.
+    
+    // runtimeLock 在isrealize和isInitialized检查过程中被持有，以防止对并发实现的竞争。
+    // runtimeLock 在方法搜索过程中保持，使方法查找+缓存填充原子相对于方法添加。
+    // 否则，可以添加一个类别，但是无限期地忽略它，因为在代表类别的缓存刷新之后，缓存会用旧值重新填充。
 
+    // 上方的说明就是对这里加锁的解释
     runtimeLock.lock();
+    
+    // 如果运行时知道这个类(位于共享缓存中，加载的图像的数据段中，或者已经用obj_allocateClassPair分配了)，
+    // 则返回true，
+    // 如果没有就崩溃了
     checkIsKnownClass(cls);
 
+    //锁定:为了防止并发实现，持有runtimeLock。
     if (!cls->isRealized()) {
         cls = realizeClassMaybeSwiftAndLeaveLocked(cls, runtimeLock);
         // runtimeLock may have been dropped but is now locked again
@@ -5307,14 +5343,23 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     runtimeLock.assertLocked();
 
     // Try this class's cache.
-
+    // 先查询一遍缓存
     imp = cache_getImp(cls, sel);
+    
+    // 如果imp 存在就跳转 done，done里面就2行代码，
+    //（PS:实现在该方法最后两行，下方再次看到 goto done，就是 return imp 的意思，不再说明）
+    
     if (imp) goto done;
 
     // Try this class's method lists.
+    // 在该对象的所属的类的方法列表中查找
+    
+    //  { } 代表作用域，作用域中声明的变量出了作用域就会释放，所以可以进行多个同名的声明。
     {
+        //使用二分查找法
         Method meth = getMethodNoSuper_nolock(cls, sel);
         if (meth) {
+            // 如果找到了就填充到缓存中
             log_and_fill_cache(cls, meth->imp, sel, inst, cls);
             imp = meth->imp;
             goto done;
@@ -5322,6 +5367,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     }
 
     // Try superclass caches and method lists.
+    // 从父类中查找
     {
         unsigned attempts = unreasonableClassCount();
         for (Class curClass = cls->superclass;
@@ -5334,6 +5380,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
             }
             
             // Superclass cache.
+            // 寻找父类的缓存中有没有
             imp = cache_getImp(curClass, sel);
             if (imp) {
                 if (imp != (IMP)_objc_msgForward_impcache) {
@@ -5350,6 +5397,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
             }
             
             // Superclass method list.
+            // 寻找父类的方法列表中有没有
             Method meth = getMethodNoSuper_nolock(curClass, sel);
             if (meth) {
                 log_and_fill_cache(cls, meth->imp, sel, inst, curClass);
@@ -5360,7 +5408,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     }
 
     // No implementation found. Try method resolver once.
-
+    // 没有找到就进行消息转发
     if (resolver  &&  !triedResolver) {
         runtimeLock.unlock();
         resolveMethod(cls, sel, inst);
@@ -5374,6 +5422,7 @@ IMP lookUpImpOrForward(Class cls, SEL sel, id inst,
     // No implementation found, and method resolver didn't help. 
     // Use forwarding.
 
+    //没有实现消息转发就进入 _objc_msgForward_impcache 的汇编了
     imp = (IMP)_objc_msgForward_impcache;
     cache_fill(cls, sel, imp, inst);
 
