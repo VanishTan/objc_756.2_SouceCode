@@ -4946,7 +4946,7 @@ static method_t *findMethodInSortedMethodList(SEL key, const method_list_t *list
     
     /**
      * count ： 初始值为方法列表的个数 假设 48
-     * 1、如果 count != 0; 循环条件每次 右移一位  也就是说 除以 2;
+     * 1、 如果 count != 0; 循环条件每次 右移一位  也就是说 除以 2;
      * 2、 第一次进入 从一半开始找起，如果 keyValue > probeValue 那么在右边，否则在左边;
      * 3、 第二次是从 12 开始找起，也不满足 keyValue > probeValue 的条件;
      * 4、 第二次从 6 开始找起，满足条件 keyValue > probeValue，将初始值移动到当前 6 的后一位 也就是从 7 开始查找，然后count--, 也就是说当前 count = 5 ，然后在对 > 6 且 < 12 进行查找，也就是 7 - 11 ，count >> 1 为 2， 7+2 = 9，刚还是 7 - 11 的中心。
