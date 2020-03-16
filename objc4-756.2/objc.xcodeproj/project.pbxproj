@@ -34,6 +34,7 @@
 /* Begin PBXBuildFile section */
 		2D27F802241CF725003C8175 /* TestClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D27F7FF241CF724003C8175 /* TestClass.m */; };
 		2D27F803241CF725003C8175 /* TestSuperClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D27F801241CF725003C8175 /* TestSuperClass.m */; };
+		2DB887E4241F56EB0031F401 /* NSObject+FixMethodCrash.m in Sources */ = {isa = PBXBuildFile; fileRef = 2DB887E3241F56EB0031F401 /* NSObject+FixMethodCrash.m */; };
 		393CEAC00DC69E3E000B69DE /* objc-references.mm in Sources */ = {isa = PBXBuildFile; fileRef = 393CEABF0DC69E3E000B69DE /* objc-references.mm */; };
 		393CEAC60DC69E67000B69DE /* objc-references.h in Headers */ = {isa = PBXBuildFile; fileRef = 393CEAC50DC69E67000B69DE /* objc-references.h */; };
 		39ABD72312F0B61800D1054C /* objc-weak.h in Headers */ = {isa = PBXBuildFile; fileRef = 39ABD71F12F0B61800D1054C /* objc-weak.h */; };
@@ -160,6 +161,8 @@
 		2D27F7FF241CF724003C8175 /* TestClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestClass.m; sourceTree = "<group>"; };
 		2D27F800241CF724003C8175 /* TestSuperClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestSuperClass.h; sourceTree = "<group>"; };
 		2D27F801241CF725003C8175 /* TestSuperClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestSuperClass.m; sourceTree = "<group>"; };
+		2DB887E2241F56EB0031F401 /* NSObject+FixMethodCrash.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NSObject+FixMethodCrash.h"; sourceTree = "<group>"; };
+		2DB887E3241F56EB0031F401 /* NSObject+FixMethodCrash.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NSObject+FixMethodCrash.m"; sourceTree = "<group>"; };
 		393CEABF0DC69E3E000B69DE /* objc-references.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = "objc-references.mm"; path = "runtime/objc-references.mm"; sourceTree = "<group>"; };
 		393CEAC50DC69E67000B69DE /* objc-references.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-references.h"; path = "runtime/objc-references.h"; sourceTree = "<group>"; };
 		39ABD71F12F0B61800D1054C /* objc-weak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-weak.h"; path = "runtime/objc-weak.h"; sourceTree = "<group>"; };
@@ -365,6 +368,15 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		2DB887E1241F56C40031F401 /* CrashFix */ = {
+			isa = PBXGroup;
+			children = (
+				2DB887E2241F56EB0031F401 /* NSObject+FixMethodCrash.h */,
+				2DB887E3241F56EB0031F401 /* NSObject+FixMethodCrash.m */,
+			);
+			path = CrashFix;
+			sourceTree = "<group>";
+		};
 		6F8ADBF32314D1F300E235A9 /* objc-debug */ = {
 			isa = PBXGroup;
 			children = (
@@ -373,6 +385,7 @@
 				2D27F7FF241CF724003C8175 /* TestClass.m */,
 				2D27F800241CF724003C8175 /* TestSuperClass.h */,
 				2D27F801241CF725003C8175 /* TestSuperClass.m */,
+				2DB887E1241F56C40031F401 /* CrashFix */,
 			);
 			path = "objc-debug";
 			sourceTree = "<group>";
@@ -694,6 +707,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2DB887E4241F56EB0031F401 /* NSObject+FixMethodCrash.m in Sources */,
 				2D27F802241CF725003C8175 /* TestClass.m in Sources */,
 				6F8ADBF52314D1F300E235A9 /* main.m in Sources */,
 				2D27F803241CF725003C8175 /* TestSuperClass.m in Sources */,
