@@ -44,6 +44,9 @@
 
 /* Begin PBXBuildFile section */
 		0466411525A4991B002440A8 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 0466411425A4991B002440A8 /* main.m */; };
+		2D6DE23E25C9469C00A97330 /* TestSuperClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23725C9469C00A97330 /* TestSuperClass.m */; };
+		2D6DE23F25C9469C00A97330 /* NSObject+FixMethodCrash.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23B25C9469C00A97330 /* NSObject+FixMethodCrash.m */; };
+		2D6DE24025C9469C00A97330 /* TestClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23C25C9469C00A97330 /* TestClass.m */; };
 		393CEAC00DC69E3E000B69DE /* objc-references.mm in Sources */ = {isa = PBXBuildFile; fileRef = 393CEABF0DC69E3E000B69DE /* objc-references.mm */; };
 		393CEAC60DC69E67000B69DE /* objc-references.h in Headers */ = {isa = PBXBuildFile; fileRef = 393CEAC50DC69E67000B69DE /* objc-references.h */; };
 		39ABD72312F0B61800D1054C /* objc-weak.h in Headers */ = {isa = PBXBuildFile; fileRef = 39ABD71F12F0B61800D1054C /* objc-weak.h */; };
@@ -222,6 +225,12 @@
 /* Begin PBXFileReference section */
 		0466411225A4991B002440A8 /* KCObjcBuild */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = KCObjcBuild; sourceTree = BUILT_PRODUCTS_DIR; };
 		0466411425A4991B002440A8 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		2D6DE23725C9469C00A97330 /* TestSuperClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestSuperClass.m; sourceTree = "<group>"; };
+		2D6DE23825C9469C00A97330 /* TestSuperClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestSuperClass.h; sourceTree = "<group>"; };
+		2D6DE23A25C9469C00A97330 /* NSObject+FixMethodCrash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSObject+FixMethodCrash.h"; sourceTree = "<group>"; };
+		2D6DE23B25C9469C00A97330 /* NSObject+FixMethodCrash.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSObject+FixMethodCrash.m"; sourceTree = "<group>"; };
+		2D6DE23C25C9469C00A97330 /* TestClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestClass.m; sourceTree = "<group>"; };
+		2D6DE23D25C9469C00A97330 /* TestClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestClass.h; sourceTree = "<group>"; };
 		393CEABF0DC69E3E000B69DE /* objc-references.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = "objc-references.mm"; path = "runtime/objc-references.mm"; sourceTree = "<group>"; };
 		393CEAC50DC69E67000B69DE /* objc-references.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-references.h"; path = "runtime/objc-references.h"; sourceTree = "<group>"; };
 		39ABD71F12F0B61800D1054C /* objc-weak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-weak.h"; path = "runtime/objc-weak.h"; sourceTree = "<group>"; };
@@ -386,6 +395,11 @@
 			isa = PBXGroup;
 			children = (
 				0466411425A4991B002440A8 /* main.m */,
+				2D6DE23D25C9469C00A97330 /* TestClass.h */,
+				2D6DE23C25C9469C00A97330 /* TestClass.m */,
+				2D6DE23825C9469C00A97330 /* TestSuperClass.h */,
+				2D6DE23725C9469C00A97330 /* TestSuperClass.m */,
+				2D6DE23925C9469C00A97330 /* CrashFix */,
 			);
 			path = KCObjcBuild;
 			sourceTree = "<group>";
@@ -472,6 +486,15 @@
 				0466411225A4991B002440A8 /* KCObjcBuild */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		2D6DE23925C9469C00A97330 /* CrashFix */ = {
+			isa = PBXGroup;
+			children = (
+				2D6DE23A25C9469C00A97330 /* NSObject+FixMethodCrash.h */,
+				2D6DE23B25C9469C00A97330 /* NSObject+FixMethodCrash.m */,
+			);
+			path = CrashFix;
 			sourceTree = "<group>";
 		};
 		6EF877D82325D62600963DBB /* objcdt */ = {
@@ -867,6 +890,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2D6DE24025C9469C00A97330 /* TestClass.m in Sources */,
+				2D6DE23F25C9469C00A97330 /* NSObject+FixMethodCrash.m in Sources */,
+				2D6DE23E25C9469C00A97330 /* TestSuperClass.m in Sources */,
 				0466411525A4991B002440A8 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
