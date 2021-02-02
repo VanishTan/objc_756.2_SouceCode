@@ -28,6 +28,8 @@
 
 #if __arm64__
 
+#include "objc-config.h"
+
 #if __LP64__
 // true arm64
 
@@ -108,8 +110,9 @@
 .endmacro
 
 .macro TailCallCachedImp
-	// $0 = cached imp, $1 = address of cached imp, $2 = SEL
+	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
 	eor	$1, $1, $2	// mix SEL into ptrauth modifier
+	eor	$1, $1, $3  // mix isa into ptrauth modifier
 	brab	$0, $1
 .endmacro
 
@@ -124,12 +127,37 @@
 .endmacro
 
 .macro AuthAndResignAsIMP
-	// $0 = cached imp, $1 = address of cached imp, $2 = SEL
+	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
 	// note: assumes the imp is not nil
 	eor	$1, $1, $2	// mix SEL into ptrauth modifier
-	autib	$0, $1		// authenticate cached imp
+	eor	$1, $1, $3  // mix isa into ptrauth modifier
+	autib	$0, $1	// authenticate cached imp
 	ldr	xzr, [$0]	// crash if authentication failed
 	paciza	$0		// resign cached imp as IMP
+.endmacro
+
+.macro ExtractISA
+	and	$0, $1, #ISA_MASK
+#if ISA_SIGNING_AUTH_MODE == ISA_SIGNING_STRIP
+	xpacd	$0
+#elif ISA_SIGNING_AUTH_MODE == ISA_SIGNING_AUTH
+	mov	x10, $2
+	movk	x10, #ISA_SIGNING_DISCRIMINATOR, LSL #48
+	autda	$0, x10
+#endif
+.endmacro
+
+.macro AuthISASuper dst, addr_mutable, discriminator
+#if ISA_SIGNING_AUTH_MODE == ISA_SIGNING_AUTH
+	movk	\addr_mutable, #\discriminator, LSL #48
+	autda	\dst, \addr_mutable
+#elif ISA_SIGNING_AUTH_MODE == ISA_SIGNING_STRIP
+	xpacd	\dst
+#endif
+.endmacro
+
+.macro SignAsImp
+	paciza	$0
 .endmacro
 
 // JOP
@@ -142,7 +170,8 @@
 .endmacro
 
 .macro TailCallCachedImp
-	// $0 = cached imp, $1 = address of cached imp, $2 = SEL
+	// $0 = cached imp, $1 = address of cached imp, $2 = SEL, $3 = isa
+	eor	$0, $0, $3
 	br	$0
 .endmacro
 
@@ -158,8 +187,15 @@
 
 .macro AuthAndResignAsIMP
 	// $0 = cached imp, $1 = address of cached imp, $2 = SEL
-	// empty
-.endmacro	
+	eor	$0, $0, $3
+.endmacro
+
+.macro SignAsImp
+.endmacro
+
+.macro ExtractISA
+	and    $0, $1, #ISA_MASK
+.endmacro
 
 // not JOP
 #endif

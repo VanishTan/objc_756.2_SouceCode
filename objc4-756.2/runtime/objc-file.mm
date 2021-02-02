@@ -59,14 +59,21 @@ GETSECT(_getObjc2SelectorRefs,        SEL,             "__objc_selrefs");
 GETSECT(_getObjc2MessageRefs,         message_ref_t,   "__objc_msgrefs"); 
 GETSECT(_getObjc2ClassRefs,           Class,           "__objc_classrefs");
 GETSECT(_getObjc2SuperRefs,           Class,           "__objc_superrefs");
-GETSECT(_getObjc2ClassList,           classref_t,      "__objc_classlist");
-GETSECT(_getObjc2NonlazyClassList,    classref_t,      "__objc_nlclslist");
-GETSECT(_getObjc2CategoryList,        category_t *,    "__objc_catlist");
-GETSECT(_getObjc2NonlazyCategoryList, category_t *,    "__objc_nlcatlist");
-GETSECT(_getObjc2ProtocolList,        protocol_t *,    "__objc_protolist");
+GETSECT(_getObjc2ClassList,           classref_t const,      "__objc_classlist");
+GETSECT(_getObjc2NonlazyClassList,    classref_t const,      "__objc_nlclslist");
+GETSECT(_getObjc2CategoryList,        category_t * const,    "__objc_catlist");
+GETSECT(_getObjc2CategoryList2,       category_t * const,    "__objc_catlist2");
+GETSECT(_getObjc2NonlazyCategoryList, category_t * const,    "__objc_nlcatlist");
+GETSECT(_getObjc2ProtocolList,        protocol_t * const,    "__objc_protolist");
 GETSECT(_getObjc2ProtocolRefs,        protocol_t *,    "__objc_protorefs");
 GETSECT(getLibobjcInitializers,       UnsignedInitializer, "__objc_init_func");
 
+uint32_t *getLibobjcInitializerOffsets(const headerType *mhdr, size_t *outCount) {
+    unsigned long byteCount = 0;
+    uint32_t *offsets = (uint32_t *)getsectiondata(mhdr, "__TEXT", "__objc_init_offs", &byteCount);
+    if (outCount) *outCount = byteCount / sizeof(uint32_t);
+    return offsets;
+}
 
 objc_image_info *
 _getObjcImageInfo(const headerType *mhdr, size_t *outBytes)

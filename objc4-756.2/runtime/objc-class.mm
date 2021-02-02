@@ -159,6 +159,9 @@
 #include "objc-private.h"
 #include "objc-abi.h"
 #include <objc/message.h>
+#if !TARGET_OS_WIN32
+//#include <os/linker_set.h>
+#endif
 
 /***********************************************************************
 * Information about multi-thread support:
@@ -195,10 +198,9 @@ Class object_setClass(id obj, Class cls)
     // weakly-referenced object has an un-+initialized isa.
     // Unresolved future classes are not so protected.
     if (!cls->isFuture()  &&  !cls->isInitialized()) {
-        // use lookUpImpOrForward to indirectly provoke +initialize
+        // use lookUpImpOrNilTryCache to indirectly provoke +initialize
         // to avoid duplicating the code to actually send +initialize
-        lookUpImpOrForward(cls, SEL_initialize, nil,
-                           YES/*initialize*/, YES/*cache*/, NO/*resolver*/);
+        lookUpImpOrNilTryCache(nil, @selector(initialize), cls, LOOKUP_INITIALIZE);
     }
 
     return obj->changeIsa(cls);
@@ -282,7 +284,7 @@ _class_lookUpIvar(Class cls, Ivar ivar, ptrdiff_t& ivarOffset,
     // Preflight the hasAutomaticIvars check
     // because _class_getClassForIvar() may need to take locks.
     bool hasAutomaticIvars = NO;
-    for (Class c = cls; c; c = c->superclass) {
+    for (Class c = cls; c; c = c->getSuperclass()) {
         if (c->hasAutomaticIvars()) {
             hasAutomaticIvars = YES;
             break;
@@ -338,7 +340,7 @@ _class_getIvarMemoryManagement(Class cls, Ivar ivar)
 static ALWAYS_INLINE 
 void _object_setIvar(id obj, Ivar ivar, id value, bool assumeStrong)
 {
-    if (!obj  ||  !ivar  ||  obj->isTaggedPointer()) return;
+    if (!ivar || obj->isTaggedPointerOrNil()) return;
 
     ptrdiff_t offset;
     objc_ivar_memory_management_t memoryManagement;
@@ -372,7 +374,7 @@ void object_setIvarWithStrongDefault(id obj, Ivar ivar, id value)
 
 id object_getIvar(id obj, Ivar ivar)
 {
-    if (!obj  ||  !ivar  ||  obj->isTaggedPointer()) return nil;
+    if (!ivar || obj->isTaggedPointerOrNil()) return nil;
 
     ptrdiff_t offset;
     objc_ivar_memory_management_t memoryManagement;
@@ -394,7 +396,7 @@ Ivar _object_setInstanceVariable(id obj, const char *name, void *value,
 {
     Ivar ivar = nil;
 
-    if (obj  &&  name  &&  !obj->isTaggedPointer()) {
+    if (name && !obj->isTaggedPointerOrNil()) {
         if ((ivar = _class_getVariable(obj->ISA(), name))) {
             _object_setIvar(obj, ivar, (id)value, assumeStrong);
         }
@@ -416,7 +418,7 @@ Ivar object_setInstanceVariableWithStrongDefault(id obj, const char *name,
 
 Ivar object_getInstanceVariable(id obj, const char *name, void **value)
 {
-    if (obj  &&  name  &&  !obj->isTaggedPointer()) {
+    if (name && !obj->isTaggedPointerOrNil()) {
         Ivar ivar;
         if ((ivar = class_getInstanceVariable(obj->ISA(), name))) {
             if (value) *value = (void *)object_getIvar(obj, ivar);
@@ -441,7 +443,7 @@ static void object_cxxDestructFromClass(id obj, Class cls)
 
     // Call cls's dtor first, then superclasses's dtors.
 
-    for ( ; cls; cls = cls->superclass) {
+    for ( ; cls; cls = cls->getSuperclass()) {
         if (!cls->hasCxxDtor()) return; 
         dtor = (void(*)(id))
             lookupMethodInClassAndLoadCache(cls, SEL_cxx_destruct);
@@ -463,8 +465,7 @@ static void object_cxxDestructFromClass(id obj, Class cls)
 **********************************************************************/
 void object_cxxDestruct(id obj)
 {
-    if (!obj) return;
-    if (obj->isTaggedPointer()) return;
+    if (obj->isTaggedPointerOrNil()) return;
     object_cxxDestructFromClass(obj, obj->ISA());
 }
 
@@ -485,19 +486,19 @@ void object_cxxDestruct(id obj)
 * return nil:  construction failed because a C++ constructor threw an exception
 **********************************************************************/
 id 
-object_cxxConstructFromClass(id obj, Class cls)
+object_cxxConstructFromClass(id obj, Class cls, int flags)
 {
-    assert(cls->hasCxxCtor());  // required for performance, not correctness
+    ASSERT(cls->hasCxxCtor());  // required for performance, not correctness
 
     id (*ctor)(id);
     Class supercls;
 
-    supercls = cls->superclass;
+    supercls = cls->getSuperclass();
 
     // Call superclasses' ctors first, if any.
     if (supercls  &&  supercls->hasCxxCtor()) {
-        bool ok = object_cxxConstructFromClass(obj, supercls);
-        if (!ok) return nil;  // some superclass's ctor failed - give up
+        bool ok = object_cxxConstructFromClass(obj, supercls, flags);
+        if (slowpath(!ok)) return nil;  // some superclass's ctor failed - give up
     }
 
     // Find this class's ctor, if any.
@@ -509,11 +510,17 @@ object_cxxConstructFromClass(id obj, Class cls)
         _objc_inform("CXX: calling C++ constructors for class %s", 
                      cls->nameForLogging());
     }
-    if ((*ctor)(obj)) return obj;  // ctor called and succeeded - ok
+    if (fastpath((*ctor)(obj))) return obj;  // ctor called and succeeded - ok
 
-    // This class's ctor was called and failed. 
+    supercls = cls->getSuperclass(); // this reload avoids a spill on the stack
+
+    // This class's ctor was called and failed.
     // Call superclasses's dtors to clean up.
     if (supercls) object_cxxDestructFromClass(obj, supercls);
+    if (flags & OBJECT_CONSTRUCT_FREE_ONFAILURE) free(obj);
+    if (flags & OBJECT_CONSTRUCT_CALL_BADALLOC) {
+        return _objc_callBadAllocHandler(cls);
+    }
     return nil;
 }
 
@@ -525,7 +532,7 @@ object_cxxConstructFromClass(id obj, Class cls)
 **********************************************************************/
 void fixupCopiedIvars(id newObject, id oldObject)
 {
-    for (Class cls = oldObject->ISA(); cls; cls = cls->superclass) {
+    for (Class cls = oldObject->ISA(); cls; cls = cls->getSuperclass()) {
         if (cls->hasAutomaticIvars()) {
             // Use alignedInstanceStart() because unaligned bytes at the start
             // of this class's ivars are not represented in the layout bitmap.
@@ -625,23 +632,18 @@ BOOL class_respondsToMethod(Class cls, SEL sel)
 
 BOOL class_respondsToSelector(Class cls, SEL sel)
 {
-    return class_respondsToSelector_inst(cls, sel, nil);
+    return class_respondsToSelector_inst(nil, sel, cls);
 }
 
 
 // inst is an instance of cls or a subclass thereof, or nil if none is known.
 // Non-nil inst is faster in some cases. See lookUpImpOrForward() for details.
-bool class_respondsToSelector_inst(Class cls, SEL sel, id inst)
+NEVER_INLINE __attribute__((flatten)) BOOL
+class_respondsToSelector_inst(id inst, SEL sel, Class cls)
 {
-    IMP imp;
-
-    if (!sel  ||  !cls) return NO;
-
     // Avoids +initialize because it historically did so.
     // We're not returning a callable IMP anyway.
-    imp = lookUpImpOrNil(cls, sel, inst, 
-                         NO/*initialize*/, YES/*cache*/, YES/*resolver*/);
-    return bool(imp);
+    return sel && cls && lookUpImpOrNilTryCache(inst, sel, cls, LOOKUP_RESOLVER);
 }
 
 
@@ -662,14 +664,16 @@ IMP class_lookupMethod(Class cls, SEL sel)
     return class_getMethodImplementation(cls, sel);
 }
 
+__attribute__((flatten))
 IMP class_getMethodImplementation(Class cls, SEL sel)
 {
     IMP imp;
 
     if (!cls  ||  !sel) return nil;
 
-    imp = lookUpImpOrNil(cls, sel, nil, 
-                         YES/*initialize*/, YES/*cache*/, YES/*resolver*/);
+    lockdebug_assert_no_locks_locked_except({ &loadMethodLock });
+
+    imp = lookUpImpOrNilTryCache(nil, sel, cls, LOOKUP_INITIALIZE | LOOKUP_RESOLVER);
 
     // Translate forwarding function to C-callable external version
     if (!imp) {
@@ -776,7 +780,7 @@ Class _calloc_class(size_t size)
 Class class_getSuperclass(Class cls)
 {
     if (!cls) return nil;
-    return cls->superclass;
+    return cls->getSuperclass();
 }
 
 BOOL class_isMetaClass(Class cls)
@@ -828,26 +832,6 @@ char * method_copyArgumentType(Method m, unsigned int index)
     return encoding_copyArgumentType(method_getTypeEncoding(m), index);
 }
 
-
-/***********************************************************************
-* _objc_constructOrFree
-* Call C++ constructors, and free() if they fail.
-* bytes->isa must already be set.
-* cls must have cxx constructors.
-* Returns the object, or nil.
-**********************************************************************/
-id
-_objc_constructOrFree(id bytes, Class cls)
-{
-    assert(cls->hasCxxCtor());  // for performance, not correctness
-
-    id obj = object_cxxConstructFromClass(bytes, cls);
-    if (!obj) free(bytes);
-
-    return obj;
-}
-
-
 /***********************************************************************
 * _class_createInstancesFromZone
 * Batch-allocating version of _class_createInstanceFromZone.
@@ -878,8 +862,10 @@ _class_createInstancesFromZone(Class cls, size_t extraBytes, void *zone,
     for (unsigned i = 0; i < num_allocated; i++) {
         id obj = results[i];
         obj->initIsa(cls);    // fixme allow nonpointer
-        if (ctor) obj = _objc_constructOrFree(obj, cls);
-
+        if (ctor) {
+            obj = object_cxxConstructFromClass(obj, cls,
+                                               OBJECT_CONSTRUCT_FREE_ONFAILURE);
+        }
         if (obj) {
             results[i-shift] = obj;
         } else {
@@ -905,6 +891,15 @@ inform_duplicate(const char *name, Class oldCls, Class newCls)
     const header_info *newHeader = _headerForClass(newCls);
     const char *oldName = oldHeader ? oldHeader->fname() : "??";
     const char *newName = newHeader ? newHeader->fname() : "??";
+    const objc_duplicate_class **_dupi = NULL;
+
+//    LINKER_SET_FOREACH(_dupi, const objc_duplicate_class **, "__objc_dupclass") {
+//        const objc_duplicate_class *dupi = *_dupi;
+//
+//        if (strcmp(dupi->name, name) == 0) {
+//            return;
+//        }
+//    }
 
     (DebugDuplicateClasses ? _objc_fatal : _objc_inform)
         ("Class %s is implemented in both %s (%p) and %s (%p). "
@@ -925,11 +920,11 @@ copyPropertyAttributeString(const objc_property_attribute_t *attrs,
 #if DEBUG
     // debug build: sanitize input
     for (i = 0; i < count; i++) {
-        assert(attrs[i].name);
-        assert(strlen(attrs[i].name) > 0);
-        assert(! strchr(attrs[i].name, ','));
-        assert(! strchr(attrs[i].name, '"'));
-        if (attrs[i].value) assert(! strchr(attrs[i].value, ','));
+        ASSERT(attrs[i].name);
+        ASSERT(strlen(attrs[i].name) > 0);
+        ASSERT(! strchr(attrs[i].name, ','));
+        ASSERT(! strchr(attrs[i].name, '"'));
+        if (attrs[i].value) ASSERT(! strchr(attrs[i].value, ','));
     }
 #endif
 
@@ -1015,8 +1010,8 @@ iteratePropertyAttributes(const char *attrs,
         const char *nameStart;
         const char *nameEnd;
 
-        assert(start < end);
-        assert(*start);
+        ASSERT(start < end);
+        ASSERT(*start);
         if (*start != '\"') {
             // single-char short name
             nameStart = start;
@@ -1036,7 +1031,7 @@ iteratePropertyAttributes(const char *attrs,
         const char *valueStart;
         const char *valueEnd;
 
-        assert(start <= end);
+        ASSERT(start <= end);
 
         valueStart = start;
         valueEnd = end;
@@ -1113,8 +1108,8 @@ copyPropertyAttributeList(const char *attrs, unsigned int *outCount)
 
     attrcount = iteratePropertyAttributes(attrs, copyOneAttribute, &ra, &rs);
 
-    assert((uint8_t *)(ra+1) <= (uint8_t *)result+size);
-    assert((uint8_t *)rs <= (uint8_t *)result+size);
+    ASSERT((uint8_t *)(ra+1) <= (uint8_t *)result+size);
+    ASSERT((uint8_t *)rs <= (uint8_t *)result+size);
 
     if (attrcount == 0) {
         free(result);

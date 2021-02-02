@@ -46,7 +46,7 @@
 /* Linker metadata symbols */
 
 // NSObject was in Foundation/CF on macOS < 10.8.
-#if TARGET_OS_OSX
+#if TARGET_OS_OSX && (__x86_64__ || __i386__)
 #if __OBJC2__
 
 OBJC_EXPORT const char __objc_nsobject_class_10_5
@@ -108,7 +108,7 @@ typedef struct objc_image_info {
         CorrectedSynthesize = 1<<4,  // used for an old workaround, now ignored
         IsSimulated         = 1<<5,  // image compiled for a simulator platform
         HasCategoryClassProperties  = 1<<6,  // class properties in category_t
-        // not yet used = 1<<7
+        OptimizedByDyldClosure = 1 << 7, // dyld (not the shared cache) optimized this.
 
         // 1 byte Swift unstable ABI version number
         SwiftUnstableVersionMaskShift = 8,
@@ -138,6 +138,7 @@ typedef struct objc_image_info {
     bool requiresGC()      const { return flags & RequiresGC; }
     bool optimizedByDyld() const { return flags & OptimizedByDyld; }
     bool hasCategoryClassProperties() const { return flags & HasCategoryClassProperties; }
+    bool optimizedByDyldClosure() const { return flags & OptimizedByDyldClosure; }
     bool containsSwift()   const { return (flags & SwiftUnstableVersionMask) != 0; }
     uint32_t swiftUnstableVersion() const { return (flags & SwiftUnstableVersionMask) >> SwiftUnstableVersionMaskShift; }
 #endif
@@ -170,6 +171,15 @@ HasClassProperties:
    Old ABI: Set by some compilers. Not used by the runtime.
 */
 
+// Description of an expected duplicate class name.
+// __DATA,__objc_dupclass stores one of these. Only the main image is
+// consulted for these purposes.
+typedef struct _objc_duplicate_class {
+    uint32_t version;
+    uint32_t flags;
+    const char name[64];
+} objc_duplicate_class;
+#define OBJC_HAS_DUPLICATE_CLASS 1
 
 /* Properties */
 
@@ -411,7 +421,7 @@ objc_retainBlock(id _Nullable)
 
 // Extract class pointer from an isa field.
     
-#if TARGET_OS_SIMULATOR && !TARGET_OS_IOSMAC
+#if TARGET_OS_SIMULATOR && !TARGET_OS_MACCATALYST && !__arm64__
     // No simulators use nonpointer isa yet.
     
 #elif __LP64__
@@ -458,7 +468,10 @@ OBJC_EXPORT const struct { char c; } objc_absolute_indexed_isa_index_shift
 #if !defined(OBJC_DECLARE_SYMBOLS)
 __OSX_AVAILABLE(10.0)
 __IOS_UNAVAILABLE __TVOS_UNAVAILABLE
-__WATCHOS_UNAVAILABLE __BRIDGEOS_UNAVAILABLE
+__WATCHOS_UNAVAILABLE
+#   ifndef __APPLE_BLEACH_SDK__
+__BRIDGEOS_UNAVAILABLE
+#   endif
 #endif
 OBJC_ROOT_CLASS
 @interface Object {

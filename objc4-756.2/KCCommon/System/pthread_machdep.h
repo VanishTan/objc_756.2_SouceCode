@@ -66,19 +66,19 @@
 
 /* This header contains pre defined thread specific keys */
 /* 0 is used for pthread_self */
-//#define _PTHREAD_TSD_SLOT_PTHREAD_SELF        0
+#define _PTHREAD_TSD_SLOT_PTHREAD_SELF		0
 /* Keys 1- 9 for use by dyld, directly or indirectly */
 #define _PTHREAD_TSD_SLOT_DYLD_1		1
 #define _PTHREAD_TSD_SLOT_DYLD_2		2
 #define _PTHREAD_TSD_SLOT_DYLD_3		3
-//#define _PTHREAD_TSD_RESERVED_SLOT_COUNT    4
+#define _PTHREAD_TSD_RESERVED_SLOT_COUNT	4
 /* To mirror the usage by dyld for Unwind_SjLj */
 #define _PTHREAD_TSD_SLOT_DYLD_8		8
 
 /* Keys 10 - 29 are for Libc/Libsystem internal ussage */
 /* used as __pthread_tsd_first + Num  */
 #define __PTK_LIBC_LOCALE_KEY		10
-//#define __PTK_LIBC_TTYNAME_KEY        11
+#define __PTK_LIBC_TTYNAME_KEY		11
 #define __PTK_LIBC_LOCALTIME_KEY	12
 #define __PTK_LIBC_GMTIME_KEY		13
 #define __PTK_LIBC_GDTOA_BIGINT_KEY	14
@@ -230,23 +230,23 @@ int       pthread_key_init_np(int, void (*)(void *));
 //    return 1;
 //#endif
 //}
-//
-//#if TARGET_IPHONE_SIMULATOR || defined(__ppc__) || defined(__ppc64__) || \
-//    (defined(__arm__) && !defined(_ARM_ARCH_7) && defined(_ARM_ARCH_6) && defined(__thumb__))
-//
-//#define _pthread_getspecific_direct(key) pthread_getspecific((key))
-//#define _pthread_setspecific_direct(key, val) pthread_setspecific((key), (val))
-//
-//#else
-//
-///* To be used with static constant keys only */
+
+#if TARGET_IPHONE_SIMULATOR || defined(__ppc__) || defined(__ppc64__) || \
+	(defined(__arm__) && !defined(_ARM_ARCH_7) && defined(_ARM_ARCH_6) && defined(__thumb__))
+
+#define _pthread_getspecific_direct(key) pthread_getspecific((key))
+#define _pthread_setspecific_direct(key, val) pthread_setspecific((key), (val))
+
+#else
+
+/* To be used with static constant keys only */
 //__inline__ static void *
 //_pthread_getspecific_direct(unsigned long slot)
 //{
 //    void *ret;
 //#if defined(__i386__) || defined(__x86_64__)
 //    __asm__("mov %%gs:%1, %0" : "=r" (ret) : "m" (*(void **)(slot * sizeof(void *))));
-//#elif (defined(__arm__) && (defined(_ARM_ARCH_6) || defined(_ARM_ARCH_5))) 
+//#elif (defined(__arm__) && (defined(_ARM_ARCH_6) || defined(_ARM_ARCH_5)))
 //    void **__pthread_tsd;
 //#if defined(__arm__) && defined(_ARM_ARCH_6)
 //    uintptr_t __pthread_tpid;
@@ -262,8 +262,8 @@ int       pthread_key_init_np(int, void (*)(void *));
 //#endif
 //    return ret;
 //}
-//
-///* To be used with static constant keys only */
+
+/* To be used with static constant keys only */
 //__inline__ static int
 //_pthread_setspecific_direct(unsigned long slot, void * val)
 //{
@@ -276,7 +276,7 @@ int       pthread_key_init_np(int, void (*)(void *));
 //#elif defined(__x86_64__)
 //    /* PIC is free and cannot be disabled, even with: gcc -mdynamic-no-pic ... */
 //    __asm__("movq %1,%%gs:%0" : "=m" (*(void **)(slot * sizeof(void *))) : "rn" (val));
-//#elif (defined(__arm__) && (defined(_ARM_ARCH_6) || defined(_ARM_ARCH_5))) 
+//#elif (defined(__arm__) && (defined(_ARM_ARCH_6) || defined(_ARM_ARCH_5)))
 //    void **__pthread_tsd;
 //#if defined(__arm__) && defined(_ARM_ARCH_6)
 //    uintptr_t __pthread_tpid;
@@ -292,11 +292,11 @@ int       pthread_key_init_np(int, void (*)(void *));
 //#endif
 //    return 0;
 //}
-//
-//#endif
 
-//#define LOCK_INIT(l)    ((l) = 0)
-//#define LOCK_INITIALIZER 0
+#endif
+
+#define LOCK_INIT(l)	((l) = 0)
+#define LOCK_INITIALIZER 0
 
 #endif /* ! __ASSEMBLER__ */
 #endif /* _POSIX_PTHREAD_MACHDEP_H */

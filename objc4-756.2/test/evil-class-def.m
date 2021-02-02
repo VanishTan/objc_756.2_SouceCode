@@ -12,8 +12,14 @@
 
 #if __has_feature(ptrauth_calls)
 #   define SIGNED_METHOD_LIST_IMP "@AUTH(ia,0,addr) "
+#   define SIGNED_METHOD_LIST "@AUTH(da,0xC310,addr) "
+#   define SIGNED_ISA "@AUTH(da, 0x6AE1, addr) "
+#   define SIGNED_SUPER "@AUTH(da, 0xB5AB, addr) "
 #else
 #   define SIGNED_METHOD_LIST_IMP
+#   define SIGNED_METHOD_LIST
+#   define SIGNED_ISA
+#   define SIGNED_SUPER
 #endif
 
 #define str(x) #x
@@ -25,15 +31,15 @@ void* nop(void* self) { return self; }
 __END_DECLS
 
 asm(
-    ".globl _OBJC_CLASS_$_Super    \n"
-    ".section __DATA,__objc_data  \n"
-    ".align 3                     \n"
-    "_OBJC_CLASS_$_Super:          \n"
-    PTR "_OBJC_METACLASS_$_Super   \n"
-    PTR "0                        \n"
-    PTR "__objc_empty_cache \n"
-    PTR "0 \n"
-    PTR "L_ro \n"
+    ".globl _OBJC_CLASS_$_Super               \n"
+    ".section __DATA,__objc_data              \n"
+    ".align 3                                 \n"
+    "_OBJC_CLASS_$_Super:                     \n"
+    PTR "_OBJC_METACLASS_$_Super" SIGNED_ISA "\n"
+    PTR "0                                    \n"
+    PTR "__objc_empty_cache                   \n"
+    PTR "0                                    \n"
+    PTR "L_ro                                 \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -63,12 +69,12 @@ asm(
     PTR "0 \n"
     PTR "0 \n"
     ""
-    "_OBJC_METACLASS_$_Super:          \n"
-    PTR "_OBJC_METACLASS_$_Super   \n"
-    PTR "_OBJC_CLASS_$_Super        \n"
-    PTR "__objc_empty_cache \n"
-    PTR "0 \n"
-    PTR "L_meta_ro \n"
+    "_OBJC_METACLASS_$_Super:                 \n"
+    PTR "_OBJC_METACLASS_$_Super" SIGNED_ISA "\n"
+    PTR "_OBJC_CLASS_$_Super" SIGNED_SUPER   "\n"
+    PTR "__objc_empty_cache                   \n"
+    PTR "0                                    \n"
+    PTR "L_meta_ro                            \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -101,16 +107,16 @@ asm(
     "L_ro: \n"
     ".long 2 \n"
     ".long 0 \n"
-    ".long "PTRSIZE" \n"
+    ".long " PTRSIZE " \n"
 #if __LP64__
     ".long 0 \n"
 #endif
     PTR "0 \n"
     PTR "L_super_name \n"
 #if EVIL_SUPER
-    PTR "L_evil_methods \n"
+    PTR "L_evil_methods" SIGNED_METHOD_LIST "\n"
 #else
-    PTR "L_good_methods \n"
+    PTR "L_good_methods" SIGNED_METHOD_LIST "\n"
 #endif
     PTR "0 \n"
     PTR "L_super_ivars \n"
@@ -127,24 +133,24 @@ asm(
     PTR "0 \n"
     PTR "L_super_name \n"
 #if EVIL_SUPER_META
-    PTR "L_evil_methods \n"
+    PTR "L_evil_methods" SIGNED_METHOD_LIST "\n"
 #else
-    PTR "L_good_methods \n"
+    PTR "L_good_methods" SIGNED_METHOD_LIST "\n"
 #endif
     PTR "0 \n"
     PTR "0 \n"
     PTR "0 \n"
     PTR "0 \n"
 
-    ".globl _OBJC_CLASS_$_Sub    \n"
-    ".section __DATA,__objc_data  \n"
-    ".align 3                     \n"
-    "_OBJC_CLASS_$_Sub:          \n"
-    PTR "_OBJC_METACLASS_$_Sub   \n"
-    PTR "_OBJC_CLASS_$_Super       \n"
-    PTR "__objc_empty_cache \n"
-    PTR "0 \n"
-    PTR "L_sub_ro \n"
+    ".globl _OBJC_CLASS_$_Sub               \n"
+    ".section __DATA,__objc_data            \n"
+    ".align 3                               \n"
+    "_OBJC_CLASS_$_Sub:                     \n"
+    PTR "_OBJC_METACLASS_$_Sub" SIGNED_ISA "\n"
+    PTR "_OBJC_CLASS_$_Super" SIGNED_SUPER "\n"
+    PTR "__objc_empty_cache                 \n"
+    PTR "0                                  \n"
+    PTR "L_sub_ro                           \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -174,12 +180,12 @@ asm(
     PTR "0 \n"
     PTR "0 \n"
     ""
-    "_OBJC_METACLASS_$_Sub:          \n"
-    PTR "_OBJC_METACLASS_$_Super   \n"
-    PTR "_OBJC_METACLASS_$_Super        \n"
-    PTR "__objc_empty_cache \n"
-    PTR "0 \n"
-    PTR "L_sub_meta_ro \n"
+    "_OBJC_METACLASS_$_Sub:                     \n"
+    PTR "_OBJC_METACLASS_$_Super" SIGNED_ISA   "\n"
+    PTR "_OBJC_METACLASS_$_Super" SIGNED_SUPER "\n"
+    PTR "__objc_empty_cache                     \n"
+    PTR "0                                      \n"
+    PTR "L_sub_meta_ro                          \n"
     // pad to OBJC_MAX_CLASS_SIZE
     PTR "0 \n"
     PTR "0 \n"
@@ -212,16 +218,16 @@ asm(
     "L_sub_ro: \n"
     ".long 2 \n"
     ".long 0 \n"
-    ".long "PTRSIZE" \n"
+    ".long " PTRSIZE " \n"
 #if __LP64__
     ".long 0 \n"
 #endif
     PTR "0 \n"
     PTR "L_sub_name \n"
 #if EVIL_SUB
-    PTR "L_evil_methods \n"
+    PTR "L_evil_methods" SIGNED_METHOD_LIST "\n"
 #else
-    PTR "L_good_methods \n"
+    PTR "L_good_methods" SIGNED_METHOD_LIST "\n"
 #endif
     PTR "0 \n"
     PTR "L_sub_ivars \n"
@@ -238,9 +244,9 @@ asm(
     PTR "0 \n"
     PTR "L_sub_name \n"
 #if EVIL_SUB_META
-    PTR "L_evil_methods \n"
+    PTR "L_evil_methods" SIGNED_METHOD_LIST "\n"
 #else
-    PTR "L_good_methods \n"
+    PTR "L_good_methods" SIGNED_METHOD_LIST "\n"
 #endif
     PTR "0 \n"
     PTR "0 \n"
@@ -248,7 +254,7 @@ asm(
     PTR "0 \n"
 
     "L_evil_methods: \n"
-    ".long 3*"PTRSIZE" \n"
+    ".long 3*" PTRSIZE " \n"
     ".long 1 \n"
     PTR "L_load \n"
     PTR "L_load \n"
@@ -256,7 +262,7 @@ asm(
     // assumes that abort is inside the dyld shared cache
 
     "L_good_methods: \n"
-    ".long 3*"PTRSIZE" \n"
+    ".long 3*" PTRSIZE " \n"
     ".long 2 \n"
     PTR "L_load \n"
     PTR "L_load \n"
@@ -266,27 +272,27 @@ asm(
     PTR "_nop" SIGNED_METHOD_LIST_IMP "\n"
 
     "L_super_ivars: \n"
-    ".long 4*"PTRSIZE" \n"
+    ".long 4*" PTRSIZE " \n"
     ".long 1 \n"
     PTR "L_super_ivar_offset \n"
     PTR "L_super_ivar_name \n"
     PTR "L_super_ivar_type \n"
-    ".long "LOGPTRSIZE" \n"
-    ".long "PTRSIZE" \n"
+    ".long " LOGPTRSIZE " \n"
+    ".long " PTRSIZE " \n"
 
     "L_sub_ivars: \n"
-    ".long 4*"PTRSIZE" \n"
+    ".long 4*" PTRSIZE " \n"
     ".long 1 \n"
     PTR "L_sub_ivar_offset \n"
     PTR "L_sub_ivar_name \n"
     PTR "L_sub_ivar_type \n"
-    ".long "LOGPTRSIZE" \n"
-    ".long "PTRSIZE" \n"
+    ".long " LOGPTRSIZE " \n"
+    ".long " PTRSIZE " \n"
 
     "L_super_ivar_offset: \n"
     ".long 0 \n"
     "L_sub_ivar_offset: \n"
-    ".long "PTRSIZE" \n"
+    ".long " PTRSIZE " \n"
 
     ".cstring \n"
     "L_super_name:       .ascii \"Super\\0\" \n"

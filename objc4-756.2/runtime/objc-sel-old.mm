@@ -33,11 +33,6 @@
 #include "objc-private.h"
 #include "objc-sel-set.h"
 
-#if SUPPORT_PREOPT
-#include <objc-shared-cache.h>
-static const objc_selopt_t *builtins = NULL;
-#endif
-
 __BEGIN_DECLS
 
 static size_t SelrefCount = 0;
@@ -54,10 +49,6 @@ static SEL _objc_search_builtins(const char *key)
 
     if (!key) return (SEL)0;
     if ('\0' == *key) return (SEL)_objc_empty_selector;
-
-#if SUPPORT_PREOPT
-    if (builtins) return (SEL)builtins->get(key);
-#endif
 
     return (SEL)0;
 }
@@ -151,43 +142,15 @@ void sel_init(size_t selrefCount)
     // save this value for later
     SelrefCount = selrefCount;
 
-#if SUPPORT_PREOPT
-    builtins = preoptimizedSelectors();
-#endif
-
     // Register selectors used by libobjc
-
-#define s(x) SEL_##x = sel_registerNameNoLock(#x, NO)
-#define t(x,y) SEL_##y = sel_registerNameNoLock(#x, NO)
 
     mutex_locker_t lock(selLock);
 
-    s(load);
-    s(initialize);
-    t(resolveInstanceMethod:, resolveInstanceMethod);
-    t(resolveClassMethod:, resolveClassMethod);
-    t(.cxx_construct, cxx_construct);
-    t(.cxx_destruct, cxx_destruct);
-    s(retain);
-    s(release);
-    s(autorelease);
-    s(retainCount);
-    s(alloc);
-    t(allocWithZone:, allocWithZone);
-    s(dealloc);
-    s(copy);
-    s(new);
-    t(forwardInvocation:, forwardInvocation);
-    t(_tryRetain, tryRetain);
-    t(_isDeallocating, isDeallocating);
-    s(retainWeakReference);
-    s(allowsWeakReference);
+    SEL_cxx_construct = sel_registerNameNoLock(".cxx_construct", NO);
+    SEL_cxx_destruct = sel_registerNameNoLock(".cxx_destruct", NO);
 
     extern SEL FwdSel;
     FwdSel = sel_registerNameNoLock("forward::", NO);
-
-#undef s
-#undef t
 }
 
 __END_DECLS

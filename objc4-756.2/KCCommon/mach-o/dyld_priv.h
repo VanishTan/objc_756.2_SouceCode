@@ -21,46 +21,36 @@
  * 
  * @APPLE_LICENSE_HEADER_END@
  */
-#define DYLD_MACOSX_VERSION_10_11 0x000A0B00
-#define DYLD_MACOSX_VERSION_10_12 0x000A0C00
-#define DYLD_MACOSX_VERSION_10_13 0x000A0D00
-#define DYLD_MACOSX_VERSION_10_14 0x000A0E00
-
 #ifndef _MACH_O_DYLD_PRIV_H_
 #define _MACH_O_DYLD_PRIV_H_
 
+#include <assert.h>
 #include <stdbool.h>
+#include <unistd.h>
 #include <Availability.h>
 #include <TargetConditionals.h>
 #include <mach-o/dyld.h>
-#include <mach-o/dyld_images.h>
+#include <uuid/uuid.h>
+
+
 
 #if __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
+#define DYLD_MACOSX_VERSION_10_11 0x000A0B00
+#define DYLD_MACOSX_VERSION_10_12 0x000A0C00
+#define DYLD_MACOSX_VERSION_10_13 0x000A0D00
+#define DYLD_MACOSX_VERSION_10_14 0x000A0E00
 
 
 
 //
 // private interface between libSystem.dylib and dyld
 //
-extern void _dyld_fork_child();
-
-
-// DEPRECATED
-enum dyld_image_states
-{
-	dyld_image_state_mapped					= 10,		// No batch notification for this
-	dyld_image_state_dependents_mapped		= 20,		// Only batch notification for this
-	dyld_image_state_rebased				= 30, 
-	dyld_image_state_bound					= 40,
-	dyld_image_state_dependents_initialized	= 45,		// Only single notification for this
-	dyld_image_state_initialized			= 50,
-	dyld_image_state_terminated				= 60		// Only single notification for this
-};
-
-// DEPRECATED
-typedef const char* (*dyld_image_state_change_handler)(enum dyld_image_states state, uint32_t infoCount, const struct dyld_image_info info[]);
+extern void _dyld_atfork_prepare(void);
+extern void _dyld_atfork_parent(void);
+extern void _dyld_fork_child(void);
 
 
 
@@ -82,52 +72,6 @@ typedef void (*_dyld_objc_notify_unmapped)(const char* path, const struct mach_h
 void _dyld_objc_notify_register(_dyld_objc_notify_mapped    mapped,
                                 _dyld_objc_notify_init      init,
                                 _dyld_objc_notify_unmapped  unmapped);
-
-
-
-//
-// Possible thread-local variable state changes for which you can register to be notified
-//
-enum dyld_tlv_states {
-    dyld_tlv_state_allocated = 10,   // TLV range newly allocated
-    dyld_tlv_state_deallocated = 20  // TLV range about to be deallocated
-};
-
-// 
-// Info about thread-local variable storage.
-// 
-typedef struct {
-    size_t info_size;    // sizeof(dyld_tlv_info)
-    void * tlv_addr;     // Base address of TLV storage
-    size_t tlv_size;     // Byte size of TLV storage
-} dyld_tlv_info;
-
-#if __BLOCKS__
-
-// 
-// Callback that notes changes to thread-local variable storage.
-// 
-typedef void (^dyld_tlv_state_change_handler)(enum dyld_tlv_states state, const dyld_tlv_info *info);
-
-//
-// Register a handler to be called when a thread adds or removes storage for thread-local variables.
-// The registered handler will only be called from and on behalf of the thread that owns the storage.
-// The registered handler will NOT be called for any storage that was 
-//   already allocated before dyld_register_tlv_state_change_handler() was 
-//   called. Use dyld_enumerate_tlv_storage() to get that information.
-// Exists in Mac OS X 10.7 and later 
-// 
-extern void 
-dyld_register_tlv_state_change_handler(enum dyld_tlv_states state, dyld_tlv_state_change_handler handler);
-
-// 
-// Enumerate the current thread-local variable storage allocated for the current thread. 
-// Exists in Mac OS X 10.7 and later 
-//
-extern void 
-dyld_enumerate_tlv_storage(dyld_tlv_state_change_handler handler);
-
-#endif
 
 
 //
@@ -176,7 +120,62 @@ extern const char* dyld_image_path_containing_address(const void* addr);
 // Exists in Mac OS X 10.11 and later
 extern const struct mach_header* dyld_image_header_containing_address(const void* addr);
 
+typedef uint32_t dyld_platform_t;
 
+typedef struct {
+    dyld_platform_t platform;
+    uint32_t        version;
+} dyld_build_version_t;
+
+// Returns the active platform of the process
+// extern dyld_platform_t dyld_get_active_platform(void) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern dyld_platform_t dyld_get_active_platform(void) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// Base platforms are platforms that have version numbers (macOS, iOS, watchos, tvOS, bridgeOS)
+// All other platforms are mapped to a base platform for version checks
+// extern dyld_platform_t dyld_get_base_platform(dyld_platform_t platform) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern dyld_platform_t dyld_get_base_platform(dyld_platform_t platform) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// SPI to ask if a platform is a simulation platform
+// extern bool dyld_is_simulator_platform(dyld_platform_t platform) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern bool dyld_is_simulator_platform(dyld_platform_t platform) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// Takes a version and returns if the image was built againt that SDK or newer
+// In the case of multi_plaform mach-o's it tests against the active platform
+// extern bool dyld_sdk_at_least(const struct mach_header* mh, dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern bool dyld_sdk_at_least(const struct mach_header* mh, dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// Takes a version and returns if the image was built with that minos version or newer
+// In the case of multi_plaform mach-o's it tests against the active platform
+// extern bool dyld_minos_at_least(const struct mach_header* mh, dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern bool dyld_minos_at_least(const struct mach_header* mh, dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// Convenience versions of the previous two functions that run against the the main executable
+// extern bool dyld_program_sdk_at_least(dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern bool dyld_program_sdk_at_least(dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// extern bool dyld_program_minos_at_least(dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern bool dyld_program_minos_at_least(dyld_build_version_t version) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// Function that walks through the load commands and calls the internal block for every version found
+// Intended as a fallback for very complex (and rare) version checks, or for tools that need to
+// print our everything for diagnostic reasons
+// extern void dyld_get_image_versions(const struct mach_header* mh, void (^callback)(dyld_platform_t platform, uint32_t sdk_version, uint32_t min_version)) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0), bridgeos(3.0));
+extern void dyld_get_image_versions(const struct mach_header* mh, void (^callback)(dyld_platform_t platform, uint32_t sdk_version, uint32_t min_version)) __API_AVAILABLE(macos(10.14), ios(12.0), watchos(5.0), tvos(12.0));
+
+// Convienence constants for dyld version SPIs.
+
+//@VERSION_SET_DEFS@
+
+//@MACOS_PLATFORM_VERSION_DEFS@
+
+//@IOS_PLATFORM_VERSION_DEFS@
+
+//@WATCHOS_PLATFORM_VERSION_DEFS@
+
+//@TVOS_PLATFORM_VERSION_DEFS@
+
+//@BRIDGEOS_PLATFORM_VERSION_DEFS@
 
 // Convienence constants for return values from dyld_get_sdk_version() and friends.
 
@@ -186,6 +185,9 @@ extern const struct mach_header* dyld_image_header_containing_address(const void
 
 //@WATCHOS_VERSION_DEFS@
 
+//@TVOS_VERSION_DEFS@
+
+//@BRIDGEOS_VERSION_DEFS@
 
 //
 // This finds the SDK version a binary was built against.
@@ -206,14 +208,13 @@ extern uint32_t dyld_get_sdk_version(const struct mach_header* mh);
 //
 // Exists in Mac OS X 10.8 and later 
 // Exists in iOS 6.0 and later
-extern uint32_t dyld_get_program_sdk_version();
+extern uint32_t dyld_get_program_sdk_version(void);
 
-
-#if __WATCH_OS_VERSION_MIN_REQUIRED
+#if TARGET_OS_WATCH
 // watchOS only.
 // This finds the Watch OS SDK version that the main executable was built against.
 // Exists in Watch OS 2.0 and later
-extern uint32_t dyld_get_program_sdk_watch_os_version() __IOS_UNAVAILABLE __OSX_UNAVAILABLE __WATCHOS_AVAILABLE(2.0);
+extern uint32_t dyld_get_program_sdk_watch_os_version(void) __API_AVAILABLE(watchos(2.0));
 
 
 // watchOS only.
@@ -221,22 +222,21 @@ extern uint32_t dyld_get_program_sdk_watch_os_version() __IOS_UNAVAILABLE __OSX_
 // Note: dyld_get_program_min_os_version() returns the iOS equivalent (e.g. 9.0)
 //       whereas this returns the raw watchOS version (e.g. 2.0).
 // Exists in Watch OS 3.0 and later
-extern uint32_t dyld_get_program_min_watch_os_version(); // __WATCHOS_AVAILABLE(3.0);
+extern uint32_t dyld_get_program_min_watch_os_version(void) __API_AVAILABLE(watchos(3.0));
 #endif
-
 
 #if TARGET_OS_BRIDGE
 // bridgeOS only.
 // This finds the bridgeOS SDK version that the main executable was built against.
 // Exists in bridgeOSOS 2.0 and later
-extern uint32_t dyld_get_program_sdk_bridge_os_version();
+extern uint32_t dyld_get_program_sdk_bridge_os_version(void) __API_AVAILABLE(bridgeos(2.0));
 
 // bridgeOS only.
 // This finds the Watch min OS version that the main executable was built to run on.
 // Note: dyld_get_program_min_os_version() returns the iOS equivalent (e.g. 9.0)
 //       whereas this returns the raw bridgeOS version (e.g. 2.0).
 // Exists in bridgeOS 2.0 and later
-extern uint32_t dyld_get_program_min_bridge_os_version();
+extern uint32_t dyld_get_program_min_bridge_os_version(void) __API_AVAILABLE(bridgeos(2.0));
 #endif
 
 //
@@ -254,7 +254,7 @@ extern uint32_t dyld_get_min_os_version(const struct mach_header* mh);
 //
 // Exists in Mac OS X 10.8 and later 
 // Exists in iOS 6.0 and later
-extern uint32_t dyld_get_program_min_os_version();
+extern uint32_t dyld_get_program_min_os_version(void);
 
 
 
@@ -264,7 +264,7 @@ extern uint32_t dyld_get_program_min_os_version();
 //
 // Exists in iPhoneOS 3.1 and later 
 // Exists in Mac OS X 10.10 and later
-extern bool dyld_shared_cache_some_image_overridden();
+extern bool dyld_shared_cache_some_image_overridden(void);
 
 
 	
@@ -272,7 +272,7 @@ extern bool dyld_shared_cache_some_image_overridden();
 // Returns if the process is setuid or is code signed with entitlements.
 //
 // Exists in Mac OS X 10.9 and later
-extern bool dyld_process_is_restricted();
+extern bool dyld_process_is_restricted(void);
 
 
 
@@ -280,8 +280,15 @@ extern bool dyld_process_is_restricted();
 // Returns path used by dyld for standard dyld shared cache file for the current arch.
 //
 // Exists in Mac OS X 10.11 and later
-extern const char* dyld_shared_cache_file_path();
+extern const char* dyld_shared_cache_file_path(void);
 
+
+
+//
+// Returns if there are any inserted (via DYLD_INSERT_LIBRARIES) or interposing libraries.
+//
+// Exists in Mac OS X 10.15 and later
+extern bool dyld_has_inserted_or_interposing_libraries(void);
 
 
 //
@@ -375,6 +382,78 @@ extern bool _dyld_get_shared_cache_uuid(uuid_t uuid);
 extern const void* _dyld_get_shared_cache_range(size_t* length);
 
 
+//
+// Returns if the currently active dyld shared cache is optimized.
+// Note: macOS does not use optimized caches and will always return false.
+//
+// Exists in Mac OS X 10.15 and later
+// Exists in iOS 13.0 and later
+extern bool _dyld_shared_cache_optimized(void);
+
+
+//
+// Returns if the currently active dyld shared cache was built locally.
+//
+// Exists in Mac OS X 10.15 and later
+// Exists in iOS 13.0 and later
+extern bool _dyld_shared_cache_is_locally_built(void);
+
+//
+// Returns if the given app needs a closure built.
+//
+// Exists in Mac OS X 10.15 and later
+// Exists in iOS 13.0 and later
+extern bool dyld_need_closure(const char* execPath, const char* tempDir);
+
+
+struct dyld_image_uuid_offset {
+    uuid_t                      uuid;
+	uint64_t                    offsetInImage;
+    const struct mach_header*   image;
+};
+
+//
+// Given an array of addresses, returns info about each address.
+// Common usage is the array or addresses was produced by a stack backtrace.
+// For each address, returns the where that image was loaded, the offset
+// of the address in the image, and the image's uuid.  If a specified
+// address is unknown to dyld, all fields will be returned a zeros.
+//
+// Exists in macOS 10.14 and later
+// Exists in iOS 12.0 and later
+extern void _dyld_images_for_addresses(unsigned count, const void* addresses[], struct dyld_image_uuid_offset infos[]);
+
+
+//
+// Lets you register a callback which is called each time an image is loaded and provides the mach_header*, path, and
+// whether the image may be unloaded later.  During the call to _dyld_register_for_image_loads(), the callback is called
+// once for each image currently loaded.
+//
+// Exists in macOS 10.14 and later
+// Exists in iOS 12.0 and later
+extern void _dyld_register_for_image_loads(void (*func)(const struct mach_header* mh, const char* path, bool unloadable));
+
+
+
+
+//
+// Lets you register a callback which is called for bulk notifications of images loaded. During the call to
+// _dyld_register_for_bulk_image_loads(), the callback is called once with all images currently loaded.
+// Then later during dlopen() the callback is called once with all newly images.
+//
+// Exists in macOS 10.15 and later
+// Exists in iOS 13.0 and later
+extern void _dyld_register_for_bulk_image_loads(void (*func)(unsigned imageCount, const struct mach_header* mhs[], const char* paths[]));
+
+
+//
+// DriverKit main executables do not have an LC_MAIN.  Instead DriverKit.framework's initializer calls
+// _dyld_register_driverkit_main() with a function pointer that dyld should call into instead
+// of using LC_MAIN.
+//
+extern void _dyld_register_driverkit_main(void (*mainFunc)(void));
+
+
 
 //
 // When dyld must terminate a process because of a required dependent dylib
@@ -416,15 +495,52 @@ extern const char*  __progname;
 
 
 // called by libSystem_initializer only
-extern void _dyld_initializer();
+extern void _dyld_initializer(void);
 
 // never called from source code. Used by static linker to implement lazy binding
-extern void dyld_stub_binder() __asm__("dyld_stub_binder");
+extern void dyld_stub_binder(void) __asm__("dyld_stub_binder");
+
+// never call from source code.  Used by closure builder to bind missing lazy symbols to
+extern void _dyld_missing_symbol_abort(void);
+
+// Called only by objc to see if dyld has uniqued this selector.
+// Returns the value if dyld has uniqued it, or nullptr if it has not.
+// Note, this function must be called after _dyld_objc_notify_register.
+//
+// Exists in Mac OS X 10.15 and later
+// Exists in iOS 13.0 and later
+extern const char* _dyld_get_objc_selector(const char* selName);
+
+
+// Called only by objc to see if dyld has pre-optimized classes with this name.
+// The callback will be called once for each class with the given name where
+// isLoaded is true if that class is in a binary which has been previously passed
+// to the objc load notifier.
+// Note you can set stop to true to stop iterating.
+// Also note, this function must be called after _dyld_objc_notify_register.
+//
+// Exists in Mac OS X 10.15 and later
+// Exists in iOS 13.0 and later
+extern void _dyld_for_each_objc_class(const char* className,
+                                      void (^callback)(void* classPtr, bool isLoaded, bool* stop));
+
+
+// Called only by objc to see if dyld has pre-optimized protocols with this name.
+// The callback will be called once for each protocol with the given name where
+// isLoaded is true if that protocol is in a binary which has been previously passed
+// to the objc load notifier.
+// Note you can set stop to true to stop iterating.
+// Also note, this function must be called after _dyld_objc_notify_register.
+//
+// Exists in Mac OS X 10.15 and later
+// Exists in iOS 13.0 and later
+extern void _dyld_for_each_objc_protocol(const char* protocolName,
+                                         void (^callback)(void* protocolPtr, bool isLoaded, bool* stop));
 
 
 // called by exit() before it calls cxa_finalize() so that thread_local
 // objects are destroyed before global objects.
-extern void _tlv_exit();
+extern void _tlv_exit(void);
 
 
 // temp exports to keep tapi happy, until ASan stops using dyldVersionNumber

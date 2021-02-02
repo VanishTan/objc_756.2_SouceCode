@@ -28,44 +28,35 @@
 
 .data
 
-// _objc_entryPoints and _objc_exitPoints are used by objc
+// _objc_restartableRanges is used by method dispatch
 // to get the critical regions for which method caches 
 // cannot be garbage collected.
 
-.align 2
-.private_extern _objc_entryPoints
-_objc_entryPoints:
-	.long	_cache_getImp
-	.long	_objc_msgSend
-	.long	_objc_msgSend_fpret
-	.long	_objc_msgSend_stret
-	.long	_objc_msgSendSuper
-	.long	_objc_msgSendSuper2
-	.long	_objc_msgSendSuper_stret
-	.long	_objc_msgSendSuper2_stret
-	.long	_objc_msgLookup
-	.long	_objc_msgLookup_fpret
-	.long	_objc_msgLookup_stret
-	.long	_objc_msgLookupSuper2
-	.long	_objc_msgLookupSuper2_stret
+.macro RestartableEntry
+	.long	$0
 	.long	0
+	.short	LExit$0 - $0
+	.short	0xffff // The simulator doesn't support kernel based recovery
+	.long	0
+.endmacro
 
-.private_extern _objc_exitPoints
-_objc_exitPoints:
-	.long	LExit_cache_getImp
-	.long	LExit_objc_msgSend
-	.long	LExit_objc_msgSend_fpret
-	.long	LExit_objc_msgSend_stret
-	.long	LExit_objc_msgSendSuper
-	.long	LExit_objc_msgSendSuper2
-	.long	LExit_objc_msgSendSuper_stret
-	.long	LExit_objc_msgSendSuper2_stret
-	.long	LExit_objc_msgLookup
-	.long	LExit_objc_msgLookup_fpret
-	.long	LExit_objc_msgLookup_stret
-	.long	LExit_objc_msgLookupSuper2
-	.long	LExit_objc_msgLookupSuper2_stret
-	.long	0
+	.align 4
+	.private_extern _objc_restartableRanges
+_objc_restartableRanges:
+	RestartableEntry _cache_getImp
+	RestartableEntry _objc_msgSend
+	RestartableEntry _objc_msgSend_fpret
+	RestartableEntry _objc_msgSend_stret
+	RestartableEntry _objc_msgSendSuper
+	RestartableEntry _objc_msgSendSuper2
+	RestartableEntry _objc_msgSendSuper_stret
+	RestartableEntry _objc_msgSendSuper2_stret
+	RestartableEntry _objc_msgLookup
+	RestartableEntry _objc_msgLookup_fpret
+	RestartableEntry _objc_msgLookup_stret
+	RestartableEntry _objc_msgLookupSuper2
+	RestartableEntry _objc_msgLookupSuper2_stret
+	.fill	16, 1, 0
 
 
 /********************************************************************
@@ -201,6 +192,47 @@ LExit$0:
 #define FrameWithNoSaves 0x01000000  // frame, no non-volatile saves
 
 
+//////////////////////////////////////////////////////////////////////
+//
+// SAVE_REGS
+//
+// Create a stack frame and save all argument registers in preparation
+// for a function call.
+//////////////////////////////////////////////////////////////////////
+
+.macro SAVE_REGS
+
+	pushl	%ebp
+	movl	%esp, %ebp
+
+	subl	$$(8+5*16), %esp
+
+	movdqa  %xmm3, 4*16(%esp)
+	movdqa  %xmm2, 3*16(%esp)
+	movdqa  %xmm1, 2*16(%esp)
+	movdqa  %xmm0, 1*16(%esp)
+
+.endmacro
+
+
+//////////////////////////////////////////////////////////////////////
+//
+// RESTORE_REGS
+//
+// Restore all argument registers and pop the stack frame created by
+// SAVE_REGS.
+//////////////////////////////////////////////////////////////////////
+
+.macro RESTORE_REGS
+
+	movdqa  4*16(%esp), %xmm3
+	movdqa  3*16(%esp), %xmm2
+	movdqa  2*16(%esp), %xmm1
+	movdqa  1*16(%esp), %xmm0
+
+	leave
+
+.endmacro
 /////////////////////////////////////////////////////////////////////
 //
 // CacheLookup	return-type, caller
@@ -228,21 +260,25 @@ LExit$0:
 	
 .if $1 == GETIMP
 	movl	cached_imp(%eax), %eax	// return imp
-	ret
+	cmpl	$$0, %eax
+	jz	9f		// don't xor a nil imp
+	xorl	%edx, %eax	// xor the isa with the imp
+9:	ret
 
 .else
-
-.if $0 != STRET
-	// eq already set for forwarding by `jne`
-.else
-	test	%eax, %eax		// set ne for stret forwarding
-.endif
 
 .if $1 == CALL
-	jmp	*cached_imp(%eax)	// call imp
+	xorl	cached_imp(%eax), %edx	// xor imp and isa
+.if $0 != STRET
+	// ne already set for forwarding by `xor`
+.else
+	cmp	%eax, %eax		// set eq for stret forwarding
+.endif
+	jmp *%edx	// call imp
 
 .elseif $1 == LOOKUP
 	movl	cached_imp(%eax), %eax	// return imp
+	xorl	%edx, %eax	// xor isa into imp
 	ret
 
 .else
@@ -319,10 +355,7 @@ LExit$0:
 /////////////////////////////////////////////////////////////////////
 
 .macro MethodTableLookup
-	pushl	%ebp
-	movl	%esp, %ebp
-
-	subl	$$(8+5*16), %esp
+	SAVE_REGS
 
 .if $0 == NORMAL
 	movl	self+4(%ebp), %eax
@@ -332,30 +365,22 @@ LExit$0:
 	movl    selector_stret+4(%ebp), %ecx
 .endif
 	
-	movdqa  %xmm3, 4*16(%esp)
-	movdqa  %xmm2, 3*16(%esp)
-	movdqa  %xmm1, 2*16(%esp)
-	movdqa  %xmm0, 1*16(%esp)
-	
+	// lookUpImpOrForward(obj, sel, cls, LOOKUP_INITIALIZE | LOOKUP_RESOLVER)
+	movl	$$3,  12(%esp)		// LOOKUP_INITIALIZE | LOOKUP_RESOLVER
 	movl	%edx, 8(%esp)		// class
 	movl	%ecx, 4(%esp)		// selector
 	movl	%eax, 0(%esp)		// receiver
-	call	__class_lookupMethodAndLoadCache3
+	call	_lookUpImpOrForward
 
 	// imp in eax
 
-	movdqa  4*16(%esp), %xmm3
-	movdqa  3*16(%esp), %xmm2
-	movdqa  2*16(%esp), %xmm1
-	movdqa  1*16(%esp), %xmm0
-
 .if $0 == NORMAL
-	cmp	%eax, %eax	// set eq for nonstret forwarding
-.else
 	test	%eax, %eax	// set ne for stret forwarding
+.else
+	cmp	%eax, %eax	// set eq for nonstret forwarding
 .endif
 
-	leave
+	RESTORE_REGS
 
 .endmacro
 
@@ -853,7 +878,7 @@ L_forward_stret_handler:
 	// THIS IS NOT A CALLABLE C FUNCTION
 	// Out-of-band condition register is NE for stret, EQ otherwise.
 
-	jne	__objc_msgForward_stret
+	je	__objc_msgForward_stret
 	jmp	__objc_msgForward
 	
 	END_ENTRY _objc_msgForward_impcache
@@ -909,23 +934,55 @@ L_forward_stret_handler:
 
 	ENTRY _method_invoke
 
+	// See if this is a small method.
+	testb	$1, selector(%esp)
+	jnz	L_method_invoke_small
+
+	// We can directly load the IMP from big methods.
 	movl	selector(%esp), %ecx
 	movl	method_name(%ecx), %edx
 	movl	method_imp(%ecx), %eax
 	movl	%edx, selector(%esp)
 	jmp	*%eax
-	
+
+L_method_invoke_small:
+	// Small methods require a call to handle swizzling.
+	SAVE_REGS
+
+	movl	selector+4(%ebp), %eax
+	movl	%eax, 0(%esp)
+	call	__method_getImplementationAndName
+	RESTORE_REGS
+	movl	%edx, selector(%esp)
+	jmp	*%eax
+
 	END_ENTRY _method_invoke
 
 
 	ENTRY _method_invoke_stret
 
+	// See if this is a small method.
+	testb	$1, selector_stret(%esp)
+	jnz	L_method_invoke_stret_small
+
+	// We can directly load the IMP from big methods.
 	movl	selector_stret(%esp), %ecx
 	movl	method_name(%ecx), %edx
 	movl	method_imp(%ecx), %eax
 	movl	%edx, selector_stret(%esp)
 	jmp	*%eax
 	
+L_method_invoke_stret_small:
+	// Small methods require a call to handle swizzling.
+	SAVE_REGS
+
+	movl	selector_stret+4(%ebp), %eax
+	movl	%eax, 0(%esp)
+	call	__method_getImplementationAndName
+	RESTORE_REGS
+	movl	%edx, selector_stret(%esp)
+	jmp	*%eax
+
 	END_ENTRY _method_invoke_stret
 	
 

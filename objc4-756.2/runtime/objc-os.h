@@ -29,8 +29,10 @@
 #ifndef _OBJC_OS_H
 #define _OBJC_OS_H
 
+#include <atomic>
 #include <TargetConditionals.h>
 #include "objc-config.h"
+#include "objc-private.h"
 
 #ifdef __LP64__
 #   define WORD_SHIFT 3UL
@@ -43,31 +45,14 @@
 #endif
 
 static inline uint32_t word_align(uint32_t x) {
-    //字节对齐
-    // isa ,
-    // char a; 1 //’a‘
-    // 0 1 1 1 = 2^2 + 2^1 + 2^0 = 7;
-    /**
-     *  假如： x = 9
-     *  x + WORD_MASK = 9 + 7 = 16
-     *  WORD_MASK 二进制 ：0000 0111 = 7 （4+2+1）
-     *  ~WORD_MASK : 1111 1000
-     *  16 二进制  0001 0000
-     *   1111 1000
-     *   0001 0000
-     *
-     *   0001 0000 = 16
-     *
-     *   所以 x = 16（原始值：9） 也就是 8的倍数对齐
-     *
-     *
-     */
     return (x + WORD_MASK) & ~WORD_MASK;
 }
 static inline size_t word_align(size_t x) {
     return (x + WORD_MASK) & ~WORD_MASK;
 }
-
+static inline size_t align16(size_t x) {
+    return (x + size_t(15)) & ~size_t(15);
+}
 
 // Mix-in for classes that must not be copied.
 class nocopy_t {
@@ -79,6 +64,44 @@ class nocopy_t {
     ~nocopy_t() = default;
 };
 
+// Version of std::atomic that does not allow implicit conversions
+// to/from the wrapped type, and requires an explicit memory order
+// be passed to load() and store().
+template <typename T>
+struct explicit_atomic : public std::atomic<T> {
+    explicit explicit_atomic(T initial) noexcept : std::atomic<T>(std::move(initial)) {}
+    operator T() const = delete;
+    
+    T load(std::memory_order order) const noexcept {
+        return std::atomic<T>::load(order);
+    }
+    void store(T desired, std::memory_order order) noexcept {
+        std::atomic<T>::store(desired, order);
+    }
+    
+    // Convert a normal pointer to an atomic pointer. This is a
+    // somewhat dodgy thing to do, but if the atomic type is lock
+    // free and the same size as the non-atomic type, we know the
+    // representations are the same, and the compiler generates good
+    // code.
+    static explicit_atomic<T> *from_pointer(T *ptr) {
+        static_assert(sizeof(explicit_atomic<T> *) == sizeof(T *),
+                      "Size of atomic must match size of original");
+        explicit_atomic<T> *atomic = (explicit_atomic<T> *)ptr;
+        ASSERT(atomic->is_lock_free());
+        return atomic;
+    }
+};
+
+namespace objc {
+static inline uintptr_t mask16ShiftBits(uint16_t mask)
+{
+    // returns by how much 0xffff must be shifted "right" to return mask
+    uintptr_t maskShift = __builtin_clz(mask) - 16;
+    ASSERT((0xffff >> maskShift) == mask);
+    return maskShift;
+}
+}
 
 #if TARGET_OS_MAC
 
@@ -133,14 +156,9 @@ void vsyslog(int, const char *, va_list) UNAVAILABLE_ATTRIBUTE;
 
 
 #define ALWAYS_INLINE inline __attribute__((always_inline))
-#define NEVER_INLINE inline __attribute__((noinline))
+#define NEVER_INLINE __attribute__((noinline))
 
-
-//bool(x) 为真的可能性更大
-//__builtin_expect(x, 1)
 #define fastpath(x) (__builtin_expect(bool(x), 1))
-//bool(x) 为假的可能性更大
-//__builtin_expect(x, 0)
 #define slowpath(x) (__builtin_expect(bool(x), 0))
 
 
@@ -167,17 +185,25 @@ LoadExclusive(uintptr_t *src)
 
 static ALWAYS_INLINE
 bool
-StoreExclusive(uintptr_t *dst, uintptr_t oldvalue __unused, uintptr_t value)
+StoreExclusive(uintptr_t *dst, uintptr_t *oldvalue, uintptr_t value)
 {
-    return !__builtin_arm_strex(value, dst);
+    if (slowpath(__builtin_arm_strex(value, dst))) {
+        *oldvalue = LoadExclusive(dst);
+        return false;
+    }
+    return true;
 }
 
 
 static ALWAYS_INLINE
 bool
-StoreReleaseExclusive(uintptr_t *dst, uintptr_t oldvalue __unused, uintptr_t value)
+StoreReleaseExclusive(uintptr_t *dst, uintptr_t *oldvalue, uintptr_t value)
 {
-    return !__builtin_arm_stlex(value, dst);
+    if (slowpath(__builtin_arm_stlex(value, dst))) {
+        *oldvalue = LoadExclusive(dst);
+        return false;
+    }
+    return true;
 }
 
 static ALWAYS_INLINE
@@ -198,17 +224,17 @@ LoadExclusive(uintptr_t *src)
 
 static ALWAYS_INLINE
 bool
-StoreExclusive(uintptr_t *dst, uintptr_t oldvalue, uintptr_t value)
+StoreExclusive(uintptr_t *dst, uintptr_t *oldvalue, uintptr_t value)
 {
-    return __c11_atomic_compare_exchange_weak((_Atomic(uintptr_t) *)dst, &oldvalue, value, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    return __c11_atomic_compare_exchange_weak((_Atomic(uintptr_t) *)dst, oldvalue, value, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
 }
 
 
 static ALWAYS_INLINE
 bool
-StoreReleaseExclusive(uintptr_t *dst, uintptr_t oldvalue, uintptr_t value)
+StoreReleaseExclusive(uintptr_t *dst, uintptr_t *oldvalue, uintptr_t value)
 {
-    return __c11_atomic_compare_exchange_weak((_Atomic(uintptr_t) *)dst, &oldvalue, value, __ATOMIC_RELEASE, __ATOMIC_RELAXED);
+    return __c11_atomic_compare_exchange_weak((_Atomic(uintptr_t) *)dst, oldvalue, value, __ATOMIC_RELEASE, __ATOMIC_RELAXED);
 }
 
 static ALWAYS_INLINE
@@ -304,10 +330,10 @@ ClearExclusive(uintptr_t *dst __unused)
 #include <objc/objc-api.h>
 
 extern void _objc_fatal(const char *fmt, ...) 
-    __attribute__((noreturn, format (printf, 1, 2)));
+    __attribute__((noreturn, cold, format (printf, 1, 2)));
 extern void _objc_fatal_with_reason(uint64_t reason, uint64_t flags, 
                                     const char *fmt, ...) 
-    __attribute__((noreturn, format (printf, 3, 4)));
+    __attribute__((noreturn, cold, format (printf, 3, 4)));
 
 #define INIT_ONCE_PTR(var, create, delete)                              \
     do {                                                                \
@@ -417,7 +443,7 @@ typedef DWORD objc_thread_t;  // thread ID
 static __inline int thread_equal(objc_thread_t t1, objc_thread_t t2) { 
     return t1 == t2; 
 }
-static __inline objc_thread_t thread_self(void) { 
+static __inline objc_thread_t objc_thread_self(void) { 
     return GetCurrentThreadId(); 
 }
 
@@ -479,15 +505,15 @@ typedef struct {
 #define RECURSIVE_MUTEX_NOT_LOCKED 1
 extern void recursive_mutex_init(recursive_mutex_t *m);
 static __inline int _recursive_mutex_lock_nodebug(recursive_mutex_t *m) { 
-    assert(m->mutex);
+    ASSERT(m->mutex);
     return WaitForSingleObject(m->mutex, INFINITE);
 }
 static __inline bool _recursive_mutex_try_lock_nodebug(recursive_mutex_t *m) { 
-    assert(m->mutex);
+    ASSERT(m->mutex);
     return (WAIT_OBJECT_0 == WaitForSingleObject(m->mutex, 0));
 }
 static __inline int _recursive_mutex_unlock_nodebug(recursive_mutex_t *m) { 
-    assert(m->mutex);
+    ASSERT(m->mutex);
     return ReleaseMutex(m->mutex) ? 0 : RECURSIVE_MUTEX_NOT_LOCKED;
 }
 
@@ -622,10 +648,6 @@ typedef pthread_t objc_thread_t;
 static __inline int thread_equal(objc_thread_t t1, objc_thread_t t2) { 
     return pthread_equal(t1, t2); 
 }
-static __inline objc_thread_t thread_self(void) { 
-    return pthread_self(); 
-}
-
 
 typedef pthread_key_t tls_key_t;
 
@@ -635,7 +657,7 @@ static inline tls_key_t tls_create(void (*dtor)(void*)) {
     return k;
 }
 static inline void *tls_get(tls_key_t k) { 
-    return pthread_getspecific(k); 
+    return pthread_getspecific(k);
 }
 static inline void tls_set(tls_key_t k, void *value) { 
     pthread_setspecific(k, value); 
@@ -643,21 +665,20 @@ static inline void tls_set(tls_key_t k, void *value) {
 
 #if SUPPORT_DIRECT_THREAD_KEYS
 
-#if DEBUG
-static bool is_valid_direct_key(tls_key_t k) {
+static inline bool is_valid_direct_key(tls_key_t k) {
     return (   k == SYNC_DATA_DIRECT_KEY
             || k == SYNC_COUNT_DIRECT_KEY
             || k == AUTORELEASE_POOL_KEY
+            || k == _PTHREAD_TSD_SLOT_PTHREAD_SELF
 #   if SUPPORT_RETURN_AUTORELEASE
             || k == RETURN_DISPOSITION_KEY
 #   endif
                );
 }
-#endif
 
-static inline void *tls_get_direct(tls_key_t k) 
+static inline void *tls_get_direct(tls_key_t k)
 { 
-    assert(is_valid_direct_key(k));
+    ASSERT(is_valid_direct_key(k));
 
     if (_pthread_has_direct_tsd()) {
         return _pthread_getspecific_direct(k);
@@ -667,7 +688,7 @@ static inline void *tls_get_direct(tls_key_t k)
 }
 static inline void tls_set_direct(tls_key_t k, void *value) 
 { 
-    assert(is_valid_direct_key(k));
+    ASSERT(is_valid_direct_key(k));
 
     if (_pthread_has_direct_tsd()) {
         _pthread_setspecific_direct(k, value);
@@ -676,21 +697,18 @@ static inline void tls_set_direct(tls_key_t k, void *value)
     }
 }
 
-// SUPPORT_DIRECT_THREAD_KEYS
-#endif
-
-
-static inline pthread_t pthread_self_direct()
+__attribute__((const))
+static inline pthread_t objc_thread_self()
 {
-    return (pthread_t)
-        _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_PTHREAD_SELF);
+    return (pthread_t)tls_get_direct(_PTHREAD_TSD_SLOT_PTHREAD_SELF);
 }
-
-static inline mach_port_t mach_thread_self_direct() 
+#else
+__attribute__((const))
+static inline pthread_t objc_thread_self()
 {
-    return (mach_port_t)(uintptr_t)
-        _pthread_getspecific_direct(_PTHREAD_TSD_SLOT_MACH_THREAD_SELF);
+    return pthread_self();
 }
+#endif // SUPPORT_DIRECT_THREAD_KEYS
 
 
 template <bool Debug> class mutex_tt;
@@ -726,13 +744,15 @@ class mutex_tt : nocopy_t {
         lockdebug_remember_mutex(this);
     }
 
-    constexpr mutex_tt(const fork_unsafe_lock_t unsafe) : mLock(OS_UNFAIR_LOCK_INIT) { }
+    constexpr mutex_tt(__unused const fork_unsafe_lock_t unsafe) : mLock(OS_UNFAIR_LOCK_INIT) { }
 
     void lock() {
         lockdebug_mutex_lock(this);
 
+        // <rdar://problem/50384154>
+        uint32_t opts = OS_UNFAIR_LOCK_DATA_SYNCHRONIZATION | OS_UNFAIR_LOCK_ADAPTIVE_SPIN;
         os_unfair_lock_lock_with_options_inline
-            (&mLock, OS_UNFAIR_LOCK_DATA_SYNCHRONIZATION);
+            (&mLock, (os_unfair_lock_options_t)opts);
     }
 
     void unlock() {
@@ -760,7 +780,7 @@ class mutex_tt : nocopy_t {
     // Address-ordered lock discipline for a pair of locks.
 
     static void lockTwo(mutex_tt *lock1, mutex_tt *lock2) {
-        if (lock1 < lock2) {
+        if ((uintptr_t)lock1 < (uintptr_t)lock2) {
             lock1->lock();
             lock2->lock();
         } else {
@@ -810,7 +830,7 @@ class recursive_mutex_tt : nocopy_t {
         lockdebug_remember_recursive_mutex(this);
     }
 
-    constexpr recursive_mutex_tt(const fork_unsafe_lock_t unsafe)
+    constexpr recursive_mutex_tt(__unused const fork_unsafe_lock_t unsafe)
         : mLock(OS_UNFAIR_RECURSIVE_LOCK_INIT)
     { }
 
@@ -833,6 +853,15 @@ class recursive_mutex_tt : nocopy_t {
 
         bzero(&mLock, sizeof(mLock));
         mLock = os_unfair_recursive_lock OS_UNFAIR_RECURSIVE_LOCK_INIT;
+    }
+
+    bool tryLock()
+    {
+        if (os_unfair_recursive_lock_trylock(&mLock)) {
+            lockdebug_recursive_mutex_lock(this);
+            return true;
+        }
+        return false;
     }
 
     bool tryUnlock()
@@ -866,7 +895,7 @@ class monitor_tt {
         lockdebug_remember_monitor(this);
     }
 
-    monitor_tt(const fork_unsafe_lock_t unsafe) 
+    monitor_tt(__unused const fork_unsafe_lock_t unsafe)
         : mutex(PTHREAD_MUTEX_INITIALIZER), cond(PTHREAD_COND_INITIALIZER)
     { }
 
@@ -1008,63 +1037,23 @@ ustrdupMaybeNil(const uint8_t *str)
 
 // OS version checking:
 //
-// sdkVersion()
-// DYLD_OS_VERSION(mac, ios, tv, watch, bridge)
-// sdkIsOlderThan(mac, ios, tv, watch, bridge)
 // sdkIsAtLeast(mac, ios, tv, watch, bridge)
-// 
+//
 // This version order matches OBJC_AVAILABLE.
+//
+// NOTE: prefer dyld_program_sdk_at_least when possible
+#define sdkIsAtLeast(x, i, t, w, b)                                    \
+    (dyld_program_sdk_at_least(dyld_platform_version_macOS_ ## x)   || \
+     dyld_program_sdk_at_least(dyld_platform_version_iOS_ ## i)     || \
+     dyld_program_sdk_at_least(dyld_platform_version_tvOS_ ## t)    || \
+     dyld_program_sdk_at_least(dyld_platform_version_watchOS_ ## w) || \
+     dyld_program_sdk_at_least(dyld_platform_version_bridgeOS_ ## b))
 
-#if TARGET_OS_OSX
-#   define DYLD_OS_VERSION(x, i, t, w, b) DYLD_MACOSX_VERSION_##x
-#   define sdkVersion() dyld_get_program_sdk_version()
-
-#elif TARGET_OS_IOS
-#   define DYLD_OS_VERSION(x, i, t, w, b) DYLD_IOS_VERSION_##i
-#   define sdkVersion() dyld_get_program_sdk_version()
-
-#elif TARGET_OS_TV
-    // dyld does not currently have distinct constants for tvOS
-#   define DYLD_OS_VERSION(x, i, t, w, b) DYLD_IOS_VERSION_##t
-#   define sdkVersion() dyld_get_program_sdk_version()
-
-#elif TARGET_OS_BRIDGE
-#   if TARGET_OS_WATCH
-#       error bridgeOS 1.0 not supported
-#   endif
-    // fixme don't need bridgeOS versioning yet
-#   define DYLD_OS_VERSION(x, i, t, w, b) DYLD_IOS_VERSION_##t
-#   define sdkVersion() dyld_get_program_sdk_bridge_os_version()
-
-#elif TARGET_OS_WATCH
-#   define DYLD_OS_VERSION(x, i, t, w, b) DYLD_WATCHOS_VERSION_##w
-    // watchOS has its own API for compatibility reasons
-#   define sdkVersion() dyld_get_program_sdk_watch_os_version()
-
-#else
-#   error unknown OS
-#endif
+//#define sdkIsAtLeast(x, i, t, w, b)                             \
+//            (sdkVersion() >= DYLD_OS_VERSION(x, i, t, w, b))
 
 
-#define sdkIsOlderThan(x, i, t, w, b)                           \
-            (sdkVersion() < DYLD_OS_VERSION(x, i, t, w, b))
-#define sdkIsAtLeast(x, i, t, w, b)                             \
-            (sdkVersion() >= DYLD_OS_VERSION(x, i, t, w, b))
-
-// Allow bare 0 to be used in DYLD_OS_VERSION() and sdkIsOlderThan()
-#define DYLD_MACOSX_VERSION_0 0
-#define DYLD_IOS_VERSION_0 0
-#define DYLD_TVOS_VERSION_0 0
-#define DYLD_WATCHOS_VERSION_0 0
-#define DYLD_BRIDGEOS_VERSION_0 0
-
-// Pretty-print a DYLD_*_VERSION_* constant.
-#define SDK_FORMAT "%hu.%hhu.%hhu"
-#define FORMAT_SDK(v) \
-    (unsigned short)(((uint32_t)(v))>>16),  \
-    (unsigned  char)(((uint32_t)(v))>>8),   \
-    (unsigned  char)(((uint32_t)(v))>>0)
-
+#ifndef __BUILDING_OBJCDT__
 // fork() safety requires careful tracking of all locks.
 // Our custom lock types check this in debug builds.
 // Disallow direct use of all other lock types.
@@ -1072,6 +1061,6 @@ typedef __darwin_pthread_mutex_t pthread_mutex_t UNAVAILABLE_ATTRIBUTE;
 typedef __darwin_pthread_rwlock_t pthread_rwlock_t UNAVAILABLE_ATTRIBUTE;
 typedef int32_t OSSpinLock UNAVAILABLE_ATTRIBUTE;
 typedef struct os_unfair_lock_s os_unfair_lock UNAVAILABLE_ATTRIBUTE;
-
+#endif
 
 #endif

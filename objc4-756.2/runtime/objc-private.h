@@ -46,11 +46,30 @@
 #include <stdint.h>
 #include <assert.h>
 
+// An assert that's disabled for release builds but still ensures the expression compiles.
+#ifdef NDEBUG
+#define ASSERT(x) (void)sizeof(!(x))
+#else
+#define ASSERT(x) assert(x)
+#endif
+
+// `this` is never NULL in C++ unless we encounter UB, but checking for what's impossible
+// is the point of these asserts, so disable the corresponding warning, and let's hope
+// we will reach the assert despite the UB
+#define ASSERT_THIS_NOT_NULL \
+_Pragma("clang diagnostic push") \
+_Pragma("clang diagnostic ignored \"-Wundefined-bool-conversion\"") \
+ASSERT(this) \
+_Pragma("clang diagnostic pop")
+
+
 struct objc_class;
 struct objc_object;
+struct category_t;
 
 typedef struct objc_class *Class;
 typedef struct objc_object *id;
+typedef struct classref *classref_t;
 
 namespace {
     struct SideTable;
@@ -74,10 +93,15 @@ union isa_t {
     isa_t() { }
     isa_t(uintptr_t value) : bits(value) { }
 
-    Class cls;
-    // 8个字节 64个bit 010
-    //
     uintptr_t bits;
+
+private:
+    // Accessing the class requires custom ptrauth operations, so
+    // force clients to go through setClass/getClass by making this
+    // private.
+    Class cls;
+
+public:
 #if defined(ISA_BITFIELD)
     struct {
         ISA_BITFIELD;  // defined in isa.h
@@ -97,7 +121,19 @@ union isa_t {
          */
         
     };
+    
+    bool isDeallocating() {
+        return extra_rc == 0 && has_sidetable_rc == 0;
+    }
+    void setDeallocating() {
+        extra_rc = 0;
+        has_sidetable_rc = 0;
+    }
 #endif
+
+    void setClass(Class cls, objc_object *obj);
+    Class getClass(bool authenticated);
+    Class getDecodedClass(bool authenticated);
 };
 
 
@@ -108,10 +144,15 @@ private:
 public:
 
     // ISA() assumes this is NOT a tagged pointer object
-    Class ISA();
+    Class ISA(bool authenticated = false);
+
+    // rawISA() assumes this is NOT a tagged pointer object or a non pointer ISA
+    Class rawISA();
 
     // getIsa() allows this to be a tagged pointer object
     Class getIsa();
+    
+    uintptr_t isaBits() const;
 
     // initIsa() should be used to init the isa of new objects only.
     // If this object already has an isa, use changeIsa() for correctness.
@@ -130,6 +171,7 @@ public:
 
     bool hasNonpointerIsa();
     bool isTaggedPointer();
+    bool isTaggedPointerOrNil();
     bool isBasicTaggedPointer();
     bool isExtTaggedPointer();
     bool isClass();
@@ -168,25 +210,39 @@ private:
 
     // Slow paths for inline control
     id rootAutorelease2();
-    bool overrelease_error();
+    uintptr_t overrelease_error();
 
 #if SUPPORT_NONPOINTER_ISA
+    // Controls what parts of root{Retain,Release} to emit/inline
+    // - Full means the full (slow) implementation
+    // - Fast means the fastpaths only
+    // - FastOrMsgSend means the fastpaths but checking whether we should call
+    //   -retain/-release or Swift, for the usage of objc_{retain,release}
+    enum class RRVariant {
+        Full,
+        Fast,
+        FastOrMsgSend,
+    };
+
     // Unified retain count manipulation for nonpointer isa
-    id rootRetain(bool tryRetain, bool handleOverflow);
-    bool rootRelease(bool performDealloc, bool handleUnderflow);
+    inline id rootRetain(bool tryRetain, RRVariant variant);
+    inline bool rootRelease(bool performDealloc, RRVariant variant);
     id rootRetain_overflow(bool tryRetain);
-    bool rootRelease_underflow(bool performDealloc);
+    uintptr_t rootRelease_underflow(bool performDealloc);
 
     void clearDeallocating_slow();
 
     // Side table retain count overflow for nonpointer isa
+    struct SidetableBorrow { size_t borrowed, remaining; };
+
     void sidetable_lock();
     void sidetable_unlock();
 
     void sidetable_moveExtraRC_nolock(size_t extra_rc, bool isDeallocating, bool weaklyReferenced);
     bool sidetable_addExtraRC_nolock(size_t delta_rc);
-    size_t sidetable_subExtraRC_nolock(size_t delta_rc);
+    SidetableBorrow sidetable_subExtraRC_nolock(size_t delta_rc);
     size_t sidetable_getExtraRC_nolock();
+    void sidetable_clearExtraRC_nolock();
 #endif
 
     // Side-table-only retain count
@@ -196,10 +252,10 @@ private:
     bool sidetable_isWeaklyReferenced();
     void sidetable_setWeaklyReferenced_nolock();
 
-    id sidetable_retain();
+    id sidetable_retain(bool locked = false);
     id sidetable_retain_slow(SideTable& table);
 
-    uintptr_t sidetable_release(bool performDealloc = true);
+    uintptr_t sidetable_release(bool locked = false, bool performDealloc = true);
     uintptr_t sidetable_release_slow(SideTable& table, bool performDealloc = true);
 
     bool sidetable_tryRetain();
@@ -258,18 +314,71 @@ typedef struct old_property *objc_property_t;
 #include "objc-loadmethod.h"
 
 
-#if SUPPORT_PREOPT  &&  __cplusplus
-#include <objc-shared-cache.h>
-using objc_selopt_t = const objc_opt::objc_selopt_t;
-#else
-struct objc_selopt_t;
-#endif
-
-
 #define STRINGIFY(x) #x
 #define STRINGIFY2(x) STRINGIFY(x)
 
 __BEGIN_DECLS
+
+namespace objc {
+
+struct SafeRanges {
+private:
+    struct Range {
+        uintptr_t start;
+        uintptr_t end;
+
+        inline bool contains(uintptr_t ptr) const {
+            uintptr_t m_start, m_end;
+#if __arm64__
+            // <rdar://problem/48304934> Force the compiler to use ldp
+            // we really don't want 2 loads and 2 jumps.
+            __asm__(
+# if __LP64__
+                    "ldp %x[one], %x[two], [%x[src]]"
+# else
+                    "ldp %w[one], %w[two], [%x[src]]"
+# endif
+                    : [one] "=r" (m_start), [two] "=r" (m_end)
+                    : [src] "r" (this)
+            );
+#else
+            m_start = start;
+            m_end = end;
+#endif
+            return m_start <= ptr && ptr < m_end;
+        }
+    };
+
+    struct Range  shared_cache;
+    struct Range *ranges;
+    uint32_t count;
+    uint32_t size : 31;
+    uint32_t sorted : 1;
+
+public:
+    inline bool inSharedCache(uintptr_t ptr) const {
+        return shared_cache.contains(ptr);
+    }
+    inline bool contains(uint16_t witness, uintptr_t ptr) const {
+        return witness < count && ranges[witness].contains(ptr);
+    }
+
+    inline void setSharedCacheRange(uintptr_t start, uintptr_t end) {
+        shared_cache = Range{start, end};
+        add(start, end);
+    }
+    bool find(uintptr_t ptr, uint32_t &pos);
+    void add(uintptr_t start, uintptr_t end);
+    void remove(uintptr_t start, uintptr_t end);
+};
+
+extern struct SafeRanges dataSegmentsRanges;
+
+static inline bool inSharedCache(uintptr_t ptr) {
+    return dataSegmentsRanges.inSharedCache(ptr);
+}
+
+} // objc
 
 struct header_info;
 
@@ -326,6 +435,22 @@ private:
     // from this location.
     intptr_t info_offset;
 
+    // Offset from this location to the non-lazy class list
+    intptr_t nlclslist_offset;
+    uintptr_t nlclslist_count;
+
+    // Offset from this location to the non-lazy category list
+    intptr_t nlcatlist_offset;
+    uintptr_t nlcatlist_count;
+
+    // Offset from this location to the category list
+    intptr_t catlist_offset;
+    uintptr_t catlist_count;
+
+    // Offset from this location to the category list 2
+    intptr_t catlist2_offset;
+    uintptr_t catlist2_count;
+
     // Do not add fields without editing ObjCModernAbstraction.hpp
 public:
 
@@ -350,6 +475,30 @@ public:
 
     void setinfo(const objc_image_info *info) {
         info_offset = (intptr_t)info - (intptr_t)&info_offset;
+    }
+
+    const classref_t *nlclslist(size_t *outCount) const;
+
+    void set_nlclslist(const void *list) {
+        nlclslist_offset = (intptr_t)list - (intptr_t)&nlclslist_offset;
+    }
+
+    category_t * const *nlcatlist(size_t *outCount) const;
+
+    void set_nlcatlist(const void *list) {
+        nlcatlist_offset = (intptr_t)list - (intptr_t)&nlcatlist_offset;
+    }
+
+    category_t * const *catlist(size_t *outCount) const;
+
+    void set_catlist(const void *list) {
+        catlist_offset = (intptr_t)list - (intptr_t)&catlist_offset;
+    }
+
+    category_t * const *catlist2(size_t *outCount) const;
+
+    void set_catlist2(const void *list) {
+        catlist2_offset = (intptr_t)list - (intptr_t)&catlist2_offset;
     }
 
     bool isLoaded() {
@@ -386,6 +535,14 @@ public:
 
     bool isPreoptimized() const;
 
+    bool hasPreoptimizedSelectors() const;
+
+    bool hasPreoptimizedClasses() const;
+
+    bool hasPreoptimizedProtocols() const;
+
+    bool hasPreoptimizedSectionLookups() const;
+
 #if !__OBJC2__
     struct old_protocol **proto_refs;
     struct objc_module *mod_ptr;
@@ -413,7 +570,6 @@ private:
 
 extern header_info *FirstHeader;
 extern header_info *LastHeader;
-extern int HeaderCount;
 
 extern void appendHeader(header_info *hi);
 extern void removeHeader(header_info *hi);
@@ -441,30 +597,17 @@ static inline bool sectnameStartsWith(const char *sectname, const char *prefix){
 }
 
 
+#if __OBJC2__
+extern bool didCallDyldNotifyRegister;
+#endif
+
+
 /* selectors */
 extern void sel_init(size_t selrefCount);
 extern SEL sel_registerNameNoLock(const char *str, bool copy);
 
-extern SEL SEL_load;
-extern SEL SEL_initialize;
-extern SEL SEL_resolveClassMethod;
-extern SEL SEL_resolveInstanceMethod;
 extern SEL SEL_cxx_construct;
 extern SEL SEL_cxx_destruct;
-extern SEL SEL_retain;
-extern SEL SEL_release;
-extern SEL SEL_autorelease;
-extern SEL SEL_retainCount;
-extern SEL SEL_alloc;
-extern SEL SEL_allocWithZone;
-extern SEL SEL_dealloc;
-extern SEL SEL_copy;
-extern SEL SEL_new;
-extern SEL SEL_forwardInvocation;
-extern SEL SEL_tryRetain;
-extern SEL SEL_isDeallocating;
-extern SEL SEL_retainWeakReference;
-extern SEL SEL_allowsWeakReference;
 
 /* preoptimization */
 extern void preopt_init(void);
@@ -473,24 +616,36 @@ extern bool isPreoptimized(void);
 extern bool noMissingWeakSuperclasses(void);
 extern header_info *preoptimizedHinfoForHeader(const headerType *mhdr);
 
-extern objc_selopt_t *preoptimizedSelectors(void);
-
 extern Protocol *getPreoptimizedProtocol(const char *name);
+extern Protocol *getSharedCachePreoptimizedProtocol(const char *name);
 
 extern unsigned getPreoptimizedClassUnreasonableCount();
 extern Class getPreoptimizedClass(const char *name);
 extern Class* copyPreoptimizedClasses(const char *name, int *outCount);
 
-extern bool sharedRegionContains(const void *ptr);
-
 extern Class _calloc_class(size_t size);
 
 /* method lookup */
-extern IMP lookUpImpOrNil(Class, SEL, id obj, bool initialize, bool cache, bool resolver);
-extern IMP lookUpImpOrForward(Class, SEL, id obj, bool initialize, bool cache, bool resolver);
+enum {
+    LOOKUP_INITIALIZE = 1,
+    LOOKUP_RESOLVER = 2,
+    LOOKUP_NIL = 4,
+    LOOKUP_NOCACHE = 8,
+};
+extern IMP lookUpImpOrForward(id obj, SEL, Class cls, int behavior);
+extern IMP lookUpImpOrForwardTryCache(id obj, SEL, Class cls, int behavior = 0);
+extern IMP lookUpImpOrNilTryCache(id obj, SEL, Class cls, int behavior = 0);
 
 extern IMP lookupMethodInClassAndLoadCache(Class cls, SEL sel);
-extern bool class_respondsToSelector_inst(Class cls, SEL sel, id inst);
+
+struct IMPAndSEL {
+    IMP imp;
+    SEL sel;
+};
+
+extern IMPAndSEL _method_getImplementationAndName(Method m);
+
+extern BOOL class_respondsToSelector_inst(id inst, SEL sel, Class cls);
 extern Class class_initialize(Class cls, id inst);
 
 extern bool objcMsgLogEnabled;
@@ -500,7 +655,6 @@ extern bool logMessageSend(bool isClassMethod,
                     SEL selector);
 
 /* message dispatcher */
-extern IMP _class_lookupMethodAndLoadCache3(id, SEL, Class);
 
 #if !OBJC_OLD_DISPATCH_PROTOTYPES
 extern void _objc_msgForward_impcache(void);
@@ -509,11 +663,13 @@ extern id _objc_msgForward_impcache(id, SEL, ...);
 #endif
 
 /* errors */
-extern void __objc_error(id, const char *, ...) __attribute__((format (printf, 2, 3), noreturn));
-extern void _objc_inform(const char *fmt, ...) __attribute__((format (printf, 1, 2)));
-extern void _objc_inform_on_crash(const char *fmt, ...) __attribute__((format (printf, 1, 2)));
-extern void _objc_inform_now_and_on_crash(const char *fmt, ...) __attribute__((format (printf, 1, 2)));
-extern void _objc_inform_deprecated(const char *oldname, const char *newname) __attribute__((noinline));
+extern id(*badAllocHandler)(Class);
+extern id _objc_callBadAllocHandler(Class cls) __attribute__((cold, noinline));
+extern void __objc_error(id, const char *, ...) __attribute__((cold, format (printf, 2, 3), noreturn));
+extern void _objc_inform(const char *fmt, ...) __attribute__((cold, format(printf, 1, 2)));
+extern void _objc_inform_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
+extern void _objc_inform_now_and_on_crash(const char *fmt, ...) __attribute__((cold, format (printf, 1, 2)));
+extern void _objc_inform_deprecated(const char *oldname, const char *newname) __attribute__((cold, noinline));
 extern void inform_duplicate(const char *name, Class oldCls, Class cls);
 
 /* magic */
@@ -533,7 +689,6 @@ extern objc_property_attribute_t *copyPropertyAttributeList(const char *attrs, u
 extern char *copyPropertyAttributeValue(const char *attrs, const char *name);
 
 /* locking */
-extern void lock_init(void);
 
 class monitor_locker_t : nocopy_t {
     monitor_t& lock;
@@ -571,6 +726,7 @@ extern void gdb_objc_class_changed(Class cls, unsigned long changes, const char 
 #undef OPTION
 
 extern void environ_init(void);
+extern void runtime_init(void);
 
 extern void logReplacedMethod(const char *className, SEL s, bool isMeta, const char *catName, IMP oldImp, IMP newImp);
 
@@ -610,6 +766,7 @@ extern void arr_init(void);
 extern id objc_autoreleaseReturnValue(id obj);
 
 // block trampolines
+extern void _imp_implementationWithBlock_init(void);
 extern IMP _imp_implementationWithBlockNoCopy(id block);
 
 // layout.h
@@ -654,14 +811,18 @@ extern Class _class_remap(Class cls);
 extern Ivar _class_getVariable(Class cls, const char *name);
 
 extern unsigned _class_createInstancesFromZone(Class cls, size_t extraBytes, void *zone, id *results, unsigned num_requested);
-extern id _objc_constructOrFree(id bytes, Class cls);
 
 extern const char *_category_getName(Category cat);
 extern const char *_category_getClassName(Category cat);
 extern Class _category_getClass(Category cat);
 extern IMP _category_getLoadMethod(Category cat);
 
-extern id object_cxxConstructFromClass(id obj, Class cls);
+enum {
+    OBJECT_CONSTRUCT_NONE = 0,
+    OBJECT_CONSTRUCT_FREE_ONFAILURE = 1,
+    OBJECT_CONSTRUCT_CALL_BADALLOC = 2,
+};
+extern id object_cxxConstructFromClass(id obj, Class cls, int flags);
 extern void object_cxxDestruct(id obj);
 
 extern void fixupCopiedIvars(id newObject, id oldObject);
@@ -734,18 +895,18 @@ __attribute__((aligned(1))) typedef   int16_t unaligned_int16_t;
 
 // Global operator new and delete. We must not use any app overrides.
 // This ALSO REQUIRES each of these be in libobjc's unexported symbol list.
-#if __cplusplus
+#if __cplusplus && !defined(TEST_OVERRIDES_NEW)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winline-new-delete"
 #include <new>
-inline void* operator new(std::size_t size) throw (std::bad_alloc) { return malloc(size); }
-inline void* operator new[](std::size_t size) throw (std::bad_alloc) { return malloc(size); }
-inline void* operator new(std::size_t size, const std::nothrow_t&) throw() { return malloc(size); }
-inline void* operator new[](std::size_t size, const std::nothrow_t&) throw() { return malloc(size); }
-inline void operator delete(void* p) throw() { free(p); }
-inline void operator delete[](void* p) throw() { free(p); }
-inline void operator delete(void* p, const std::nothrow_t&) throw() { free(p); }
-inline void operator delete[](void* p, const std::nothrow_t&) throw() { free(p); }
+inline void* operator new(std::size_t size) { return malloc(size); }
+inline void* operator new[](std::size_t size) { return malloc(size); }
+inline void* operator new(std::size_t size, const std::nothrow_t&) noexcept(true) { return malloc(size); }
+inline void* operator new[](std::size_t size, const std::nothrow_t&) noexcept(true) { return malloc(size); }
+inline void operator delete(void* p) noexcept(true) { free(p); }
+inline void operator delete[](void* p) noexcept(true) { free(p); }
+inline void operator delete(void* p, const std::nothrow_t&) noexcept(true) { free(p); }
+inline void operator delete[](void* p, const std::nothrow_t&) noexcept(true) { free(p); }
 #pragma clang diagnostic pop
 #endif
 
@@ -846,8 +1007,8 @@ class StripedMap {
         // Verify alignment expectations.
         uintptr_t base = (uintptr_t)&array[0].value;
         uintptr_t delta = (uintptr_t)&array[1].value - base;
-        assert(delta % CacheLineSize == 0);
-        assert(base % CacheLineSize == 0);
+        ASSERT(delta % CacheLineSize == 0);
+        ASSERT(base % CacheLineSize == 0);
     }
 #else
     constexpr StripedMap() {}
@@ -930,7 +1091,7 @@ class ChainedHookFunction {
     std::atomic<Fn> hook{nil};
 
 public:
-    ChainedHookFunction(Fn f) : hook{f} { };
+    constexpr ChainedHookFunction(Fn f) : hook{f} { };
 
     Fn get() {
         return hook.load(std::memory_order_acquire);
@@ -947,6 +1108,75 @@ public:
     }
 };
 
+
+// A small vector for use as a global variable. Only supports appending and
+// iteration. Stores up to N elements inline, and multiple elements in a heap
+// allocation. There is no attempt to amortize reallocation cost; this is
+// intended to be used in situation where a small number of elements is
+// common, more might happen, and significantly more is very rare.
+//
+// This does not clean up its allocation, and thus cannot be used as a local
+// variable or member of something with limited lifetime.
+
+template <typename T, unsigned InlineCount>
+class GlobalSmallVector {
+    static_assert(std::is_pod<T>::value, "SmallVector requires POD types");
+    
+protected:
+    unsigned count{0};
+    union {
+        T inlineElements[InlineCount];
+        T *elements{nullptr};
+    };
+    
+public:
+    void append(const T &val) {
+        if (count < InlineCount) {
+            // We have space. Store the new value inline.
+            inlineElements[count] = val;
+        } else if (count == InlineCount) {
+            // Inline storage is full. Switch to a heap allocation.
+            T *newElements = (T *)malloc((count + 1) * sizeof(T));
+            memcpy(newElements, inlineElements, count * sizeof(T));
+            newElements[count] = val;
+            elements = newElements;
+        } else {
+            // Resize the heap allocation and append.
+            elements = (T *)realloc(elements, (count + 1) * sizeof(T));
+            elements[count] = val;
+        }
+        count++;
+    }
+    
+    const T *begin() const {
+        return count <= InlineCount ? inlineElements : elements;
+    }
+    
+    const T *end() const {
+        return begin() + count;
+    }
+};
+
+// A small vector that cleans up its internal memory allocation when destroyed.
+template <typename T, unsigned InlineCount>
+class SmallVector: public GlobalSmallVector<T, InlineCount> {
+public:
+    ~SmallVector() {
+        if (this->count > InlineCount)
+            free(this->elements);
+    }
+
+    template <unsigned OtherCount>
+    void initFrom(const GlobalSmallVector<T, OtherCount> &other) {
+        ASSERT(this->count == 0);
+        this->count = (unsigned)(other.end() - other.begin());
+        if (this->count > InlineCount) {
+            this->elements = (T *)memdup(other.begin(), this->count * sizeof(T));
+        } else {
+            memcpy(this->inlineElements, other.begin(), this->count * sizeof(T));
+        }
+    }
+};
 
 // Pointer hash function.
 // This is not a terrific hash, but it is fast 

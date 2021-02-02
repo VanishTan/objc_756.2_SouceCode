@@ -1,24 +1,200 @@
-// This source file is part of the Swift.org open source project
-//
-// Copyright (c) 2014 - 2015 Apple Inc. and the Swift project authors
-// Licensed under Apache License v2.0 with Runtime Library Exception
-//
-// See http://swift.org/LICENSE.txt for license information
-// See http://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
-//
-
+/*
+ * Block_private.h
+ *
+ * SPI for Blocks
+ *
+ * Copyright (c) 2008-2010 Apple Inc. All rights reserved.
+ *
+ * @APPLE_LLVM_LICENSE_HEADER@
+ *
+ */
 
 #ifndef _BLOCK_PRIVATE_H_
 #define _BLOCK_PRIVATE_H_
+
+#include <Availability.h>
+#include <AvailabilityMacros.h>
+#include <TargetConditionals.h>
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
-#include "Block.h"
+#include <Block.h>
 
-#if __cplusplus
-extern "C" {
+#if __has_include(<ptrauth.h>)
+#include <ptrauth.h>
+#endif
+
+#if __has_feature(ptrauth_calls) &&  __cplusplus < 201103L
+
+// C ptrauth or old C++ ptrauth
+
+#define _Block_set_function_pointer(field, value)                       \
+    ((value)                                                            \
+     ? ((field) =                                                       \
+        (__typeof__(field))                                             \
+        ptrauth_auth_and_resign((void*)(value),                         \
+                                ptrauth_key_function_pointer, 0,        \
+                                ptrauth_key_block_function, &(field)))  \
+     : ((field) = 0))
+
+#define _Block_get_function_pointer(field)                              \
+    ((field)                                                            \
+     ? (__typeof__(field))                                              \
+       ptrauth_auth_function((void*)(field),                            \
+                             ptrauth_key_block_function, &(field))      \
+     : (__typeof__(field))0)
+
+#else
+
+// C++11 ptrauth or no ptrauth
+
+#define _Block_set_function_pointer(field, value)       \
+    (field) = (value)
+
+#define _Block_get_function_pointer(field)      \
+    (field)
+
+#endif
+
+
+#if __has_feature(ptrauth_calls)  &&  __cplusplus >= 201103L
+
+// StorageSignedFunctionPointer<Key, Fn> stores a function pointer of type
+// Fn but signed with the given ptrauth key and with the address of its
+// storage as extra data.
+// Function pointers inside block objects are signed this way.
+template <typename Fn, ptrauth_key Key>
+class StorageSignedFunctionPointer {
+    uintptr_t bits;
+
+ public:
+
+    // Authenticate function pointer fn as a C function pointer.
+    // Re-sign it with our key and the storage address as extra data.
+    // DOES NOT actually write to our storage.
+    uintptr_t prepareWrite(Fn fn) const
+    {
+        if (fn == nullptr) {
+            return 0;
+        } else {
+            return (uintptr_t)
+                ptrauth_auth_and_resign(fn, ptrauth_key_function_pointer, 0,
+                                        Key, &bits);
+        }
+    }
+
+    // Authenticate otherBits at otherStorage.
+    // Re-sign it with our storage address.
+    // DOES NOT actually write to our storage.
+    uintptr_t prepareWrite(const StorageSignedFunctionPointer& other) const
+    {
+        if (other.bits == 0) {
+            return 0;
+        } else {
+            return (uintptr_t)
+                ptrauth_auth_and_resign((void*)other.bits, Key, &other.bits,
+                                        Key, &bits);
+        }
+    }
+
+    // Authenticate ptr as if it were stored at our storage address.
+    // Re-sign it as a C function pointer.
+    // DOES NOT actually read from our storage.
+    Fn completeReadFn(uintptr_t ptr) const
+    {
+        if (ptr == 0) {
+            return nullptr;
+        } else {
+            return ptrauth_auth_function((Fn)ptr, Key, &bits);
+        }
+    }
+
+    // Authenticate ptr as if it were at our storage address.
+    // Return it as a dereferenceable pointer.
+    // DOES NOT actually read from our storage.
+    void* completeReadRaw(uintptr_t ptr) const
+    {
+        if (ptr == 0) {
+            return nullptr;
+        } else {
+            return ptrauth_auth_data((void*)ptr, Key, &bits);
+        }
+    }
+
+    StorageSignedFunctionPointer() { }
+
+    StorageSignedFunctionPointer(Fn value)
+        : bits(prepareWrite(value)) { }
+
+    StorageSignedFunctionPointer(const StorageSignedFunctionPointer& value)
+        : bits(prepareWrite(value)) { }
+
+    StorageSignedFunctionPointer&
+    operator = (Fn rhs) {
+        bits = prepareWrite(rhs);
+        return *this;
+    }
+
+    StorageSignedFunctionPointer&
+    operator = (const StorageSignedFunctionPointer& rhs) {
+        bits = prepareWrite(rhs);
+        return *this;
+    }
+
+    operator Fn () const {
+        return completeReadFn(bits);
+    }
+
+    explicit operator void* () const {
+        return completeReadRaw(bits);
+    }
+
+    explicit operator bool () const {
+        return completeReadRaw(bits) != nullptr;
+    }
+};
+
+using BlockCopyFunction = StorageSignedFunctionPointer
+    <void(*)(void *, const void *),
+     ptrauth_key_block_function>;
+
+using BlockDisposeFunction = StorageSignedFunctionPointer
+    <void(*)(const void *),
+     ptrauth_key_block_function>;
+
+using BlockInvokeFunction = StorageSignedFunctionPointer
+    <void(*)(void *, ...),
+     ptrauth_key_block_function>;
+
+using BlockByrefKeepFunction = StorageSignedFunctionPointer
+    <void(*)(struct Block_byref *, struct Block_byref *),
+     ptrauth_key_block_function>;
+
+using BlockByrefDestroyFunction = StorageSignedFunctionPointer
+    <void(*)(struct Block_byref *),
+     ptrauth_key_block_function>;
+
+// c++11 and ptrauth_calls
+#elif !__has_feature(ptrauth_calls)
+// not ptrauth_calls
+
+typedef void(*BlockCopyFunction)(void *, const void *);
+typedef void(*BlockDisposeFunction)(const void *);
+typedef void(*BlockInvokeFunction)(void *, ...);
+typedef void(*BlockByrefKeepFunction)(struct Block_byref*, struct Block_byref*);
+typedef void(*BlockByrefDestroyFunction)(struct Block_byref *);
+
+#else
+// ptrauth_calls but not c++11
+
+typedef uintptr_t BlockCopyFunction;
+typedef uintptr_t BlockDisposeFunction;
+typedef uintptr_t BlockInvokeFunction;
+typedef uintptr_t BlockByrefKeepFunction;
+typedef uintptr_t BlockByrefDestroyFunction;
+
 #endif
 
 
@@ -45,8 +221,8 @@ struct Block_descriptor_1 {
 #define BLOCK_DESCRIPTOR_2 1
 struct Block_descriptor_2 {
     // requires BLOCK_HAS_COPY_DISPOSE
-    void (*copy)(void *dst, const void *src);
-    void (*dispose)(const void *);
+    BlockCopyFunction copy;
+    BlockDisposeFunction dispose;
 };
 
 #define BLOCK_DESCRIPTOR_3 1
@@ -59,8 +235,8 @@ struct Block_descriptor_3 {
 struct Block_layout {
     void *isa;
     volatile int32_t flags; // contains ref count
-    int32_t reserved; 
-    void (*invoke)(void *, ...);
+    int32_t reserved;
+    BlockInvokeFunction invoke;
     struct Block_descriptor_1 *descriptor;
     // imported variables
 };
@@ -94,8 +270,8 @@ struct Block_byref {
 
 struct Block_byref_2 {
     // requires BLOCK_BYREF_HAS_COPY_DISPOSE
-    void (*byref_keep)(struct Block_byref *dst, struct Block_byref *src);
-    void (*byref_destroy)(struct Block_byref *);
+    BlockByrefKeepFunction byref_keep;
+    BlockByrefDestroyFunction byref_destroy;
 };
 
 struct Block_byref_3 {
@@ -156,74 +332,105 @@ enum {
         BLOCK_FIELD_IS_WEAK | BLOCK_BYREF_CALLER
 };
 
-// Runtime entry point called by compiler when assigning objects inside copy helper routines
-BLOCK_EXPORT void _Block_object_assign(void *destAddr, const void *object, const int flags);
-    // BLOCK_FIELD_IS_BYREF is only used from within block copy helpers
+
+// Function pointer accessors
+
+static inline __typeof__(void (*)(void *, ...))
+_Block_get_invoke_fn(struct Block_layout *block)
+{
+    return (void (*)(void *, ...))_Block_get_function_pointer(block->invoke);
+}
+
+static inline void 
+_Block_set_invoke_fn(struct Block_layout *block, void (*fn)(void *, ...))
+{
+    _Block_set_function_pointer(block->invoke, fn);
+}
 
 
-// runtime entry point called by the compiler when disposing of objects inside dispose helper routine
-BLOCK_EXPORT void _Block_object_dispose(const void *object, const int flags);
+static inline __typeof__(void (*)(void *, const void *))
+_Block_get_copy_fn(struct Block_descriptor_2 *desc)
+{
+    return (void (*)(void *, const void *))_Block_get_function_pointer(desc->copy);
+}
+
+static inline void 
+_Block_set_copy_fn(struct Block_descriptor_2 *desc,
+                   void (*fn)(void *, const void *))
+{
+    _Block_set_function_pointer(desc->copy, fn);
+}
+
+
+static inline __typeof__(void (*)(const void *))
+_Block_get_dispose_fn(struct Block_descriptor_2 *desc)
+{
+    return (void (*)(const void *))_Block_get_function_pointer(desc->dispose);
+}
+
+static inline void 
+_Block_set_dispose_fn(struct Block_descriptor_2 *desc,
+                      void (*fn)(const void *))
+{
+    _Block_set_function_pointer(desc->dispose, fn);
+}
 
 
 // Other support functions
+
 
 // runtime entry to get total size of a closure
 BLOCK_EXPORT size_t Block_size(void *aBlock);
 
 // indicates whether block was compiled with compiler that sets the ABI related metadata bits
-BLOCK_EXPORT bool _Block_has_signature(void *aBlock);
+BLOCK_EXPORT bool _Block_has_signature(void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
 
 // returns TRUE if return value of block is on the stack, FALSE otherwise
-BLOCK_EXPORT bool _Block_use_stret(void *aBlock);
+BLOCK_EXPORT bool _Block_use_stret(void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
 
 // Returns a string describing the block's parameter and return types.
 // The encoding scheme is the same as Objective-C @encode.
 // Returns NULL for blocks compiled with some compilers.
-BLOCK_EXPORT const char * _Block_signature(void *aBlock);
+BLOCK_EXPORT const char * _Block_signature(void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
 
 // Returns a string describing the block's GC layout.
 // This uses the GC skip/scan encoding.
 // May return NULL.
-BLOCK_EXPORT const char * _Block_layout(void *aBlock);
+BLOCK_EXPORT const char * _Block_layout(void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
 
 // Returns a string describing the block's layout.
 // This uses the "extended layout" form described above.
 // May return NULL.
-BLOCK_EXPORT const char * _Block_extended_layout(void *aBlock);
+BLOCK_EXPORT const char * _Block_extended_layout(void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_8, __IPHONE_7_0);
 
 // Callable only from the ARR weak subsystem while in exclusion zone
-BLOCK_EXPORT bool _Block_tryRetain(const void *aBlock);
+BLOCK_EXPORT bool _Block_tryRetain(const void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
 
 // Callable only from the ARR weak subsystem while in exclusion zone
-BLOCK_EXPORT bool _Block_isDeallocating(const void *aBlock);
+BLOCK_EXPORT bool _Block_isDeallocating(const void *aBlock)
+    __OSX_AVAILABLE_STARTING(__MAC_10_7, __IPHONE_4_3);
 
 
 // the raw data space for runtime classes for blocks
 // class+meta used for stack, malloc, and collectable based blocks
-BLOCK_EXPORT void * _NSConcreteMallocBlock[32];
-BLOCK_EXPORT void * _NSConcreteAutoBlock[32];
-BLOCK_EXPORT void * _NSConcreteFinalizingBlock[32];
-BLOCK_EXPORT void * _NSConcreteWeakBlockVariable[32];
+BLOCK_EXPORT void * _NSConcreteMallocBlock[32]
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_2);
+BLOCK_EXPORT void * _NSConcreteAutoBlock[32]
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_2);
+BLOCK_EXPORT void * _NSConcreteFinalizingBlock[32]
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_2);
+BLOCK_EXPORT void * _NSConcreteWeakBlockVariable[32]
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_2);
 // declared in Block.h
 // BLOCK_EXPORT void * _NSConcreteGlobalBlock[32];
 // BLOCK_EXPORT void * _NSConcreteStackBlock[32];
 
-
-// the intercept routines that must be used under GC
-BLOCK_EXPORT void _Block_use_GC( void *(*alloc)(const unsigned long, const bool isOne, const bool isObject),
-                                  void (*setHasRefcount)(const void *, const bool),
-                                  void (*gc_assign_strong)(void *, void **),
-                                  void (*gc_assign_weak)(const void *, void *),
-                                  void (*gc_memmove)(void *, void *, unsigned long));
-
-// earlier version, now simply transitional
-BLOCK_EXPORT void _Block_use_GC5( void *(*alloc)(const unsigned long, const bool isOne, const bool isObject),
-                                  void (*setHasRefcount)(const void *, const bool),
-                                  void (*gc_assign_strong)(void *, void **),
-                                  void (*gc_assign_weak)(const void *, void *));
-
-BLOCK_EXPORT void _Block_use_RR( void (*retain)(const void *),
-                                 void (*release)(const void *));
 
 struct Block_callbacks_RR {
     size_t  size;                   // size == sizeof(struct Block_callbacks_RR)
@@ -234,31 +441,6 @@ struct Block_callbacks_RR {
 typedef struct Block_callbacks_RR Block_callbacks_RR;
 
 BLOCK_EXPORT void _Block_use_RR2(const Block_callbacks_RR *callbacks);
-
-// make a collectable GC heap based Block.  Not useful under non-GC.
-BLOCK_EXPORT void *_Block_copy_collectable(const void *aBlock);
-
-// thread-unsafe diagnostic
-BLOCK_EXPORT const char *_Block_dump(const void *block);
-
-
-// Obsolete
-
-// first layout
-struct Block_basic {
-    void *isa;
-    int Block_flags;  // int32_t
-    int Block_size; // XXX should be packed into Block_flags
-    void (*Block_invoke)(void *);
-    void (*Block_copy)(void *dst, void *src);  // iff BLOCK_HAS_COPY_DISPOSE
-    void (*Block_dispose)(void *);             // iff BLOCK_HAS_COPY_DISPOSE
-    //long params[0];  // where const imports, __block storage references, etc. get laid down
-} __attribute__((deprecated));
-
-
-#if __cplusplus
-}
-#endif
 
 
 #endif
