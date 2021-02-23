@@ -44,6 +44,22 @@
 #   define WORD_BITS 32
 #endif
 
+/**
+ 假如： x = 9
+ 
+ x + WORD_MASK = 9 + 7 = 16
+ WORD_MASK 二进制 ：0000 0111 = 7 （4+2+1）
+ ~WORD_MASK : 1111 1000
+ 16二进制为  : 0001 0000
+ 
+ 1111 1000
+ 0001 0000
+ ---------------
+ 0001 0000 = 16
+ 
+ 所以 x = 16（原始值：9） 也就是 8的倍数对齐，即 8 字节对齐
+ */
+
 static inline uint32_t word_align(uint32_t x) {
     return (x + WORD_MASK) & ~WORD_MASK;
 }

@@ -115,12 +115,14 @@ struct weak_entry_t {
 /**
  * The global weak references table. Stores object ids as keys,
  * and weak_entry_t structs as their values.
+ *
+ * 全局弱引用表。将对象id存储为键，将weak_entry_t结构体存储为其值。
  */
 struct weak_table_t {
     weak_entry_t *weak_entries;
     size_t    num_entries;
     uintptr_t mask;
-    uintptr_t max_hash_displacement;
+    uintptr_t max_hash_displacement;//最大哈希位移
 };
 
 enum WeakRegisterDeallocatingOptions {

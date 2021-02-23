@@ -42,7 +42,14 @@ int main(int argc, const char * argv[]) {
         // insert code here...
         
         TestClass *object = [TestClass alloc];
-        NSLog(@"%@",object);
+        [object weakMethod];
+        
+        
+        
+        
+        
+//        [TestClass testClassClassMethod];
+//        NSLog(@"%@",object);
         
         
     }

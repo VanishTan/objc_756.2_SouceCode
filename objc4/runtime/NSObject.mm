@@ -347,9 +347,15 @@ storeWeak(id *location, objc_object *newObj)
     // Acquire locks for old and new values.
     // Order by lock address to prevent lock ordering problems. 
     // Retry if the old value changes underneath us.
+    //获取新值和旧值的锁
+    //通过锁定地址来防止锁定排序问题。
+    //如果旧值在我们下面改变，请重试。
  retry:
     if (haveOld) {
         oldObj = *location;
+        
+        //这里的 & 是引用的意思 "[oldObj]" 是对 '[]'的重载
+        //其实StripedMap是一个以void *p为key，PaddedT为value的的表。
         oldTable = &SideTables()[oldObj];
     } else {
         oldTable = nil;
@@ -370,6 +376,9 @@ storeWeak(id *location, objc_object *newObj)
     // Prevent a deadlock between the weak reference machinery
     // and the +initialize machinery by ensuring that no 
     // weakly-referenced object has an un-+initialized isa.
+    
+    //通过确保弱引用对象没有一个未初始化的isa来防止弱引用机制和+initialize机制之间的死锁。
+    
     if (haveNew  &&  newObj) {
         Class cls = newObj->getIsa();
         if (cls != previouslyInitializedClass  &&  
@@ -391,11 +400,14 @@ storeWeak(id *location, objc_object *newObj)
     }
 
     // Clean up old value, if any.
+    //如果有旧值，就清理
     if (haveOld) {
+        ///取消注册一个已经注册的弱引用。
         weak_unregister_no_lock(&oldTable->weak_table, oldObj, location);
     }
 
     // Assign new value, if any.
+    //分配新值(如果有的话)
     if (haveNew) {
         newObj = (objc_object *)
             weak_register_no_lock(&newTable->weak_table, (id)newObj, location, 
@@ -420,6 +432,9 @@ storeWeak(id *location, objc_object *newObj)
     // arbitrary code. In particular, even if _setWeaklyReferenced
     // is not implemented, resolveInstanceMethod: may be, and may
     // call back into the weak reference machinery.
+    
+    //必须在没有锁的情况下调用，因为它可以调用任意代码。
+    //特别是，即使_setWeaklyReferenced没有实现，resolveInstanceMethod:也可能实现，也可能回调弱引用机制。
     callSetWeaklyReferenced((id)newObj);
 
     return (id)newObj;
