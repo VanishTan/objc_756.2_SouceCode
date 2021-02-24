@@ -6223,6 +6223,14 @@ static void resolveClassMethod(id inst, SEL sel, Class cls)
 * cls may be a metaclass or a non-meta class.
 * Does not check if the method already exists.
 **********************************************************************/
+
+/***********************************************************************
+* resolveInstanceMethod
+* 调用+resolveInstanceMethod，寻找要添加到cls类的方法。
+
+* cls可以是元类也可以是非元类。
+* 不检查方法是否已经存在.
+**********************************************************************/
 static void resolveInstanceMethod(id inst, SEL sel, Class cls)
 {
     runtimeLock.assertUnlocked();
@@ -6234,6 +6242,8 @@ static void resolveInstanceMethod(id inst, SEL sel, Class cls)
         // 解析器未实现。
         return;
     }
+    
+    printf("%p",cls);
 
     BOOL (*msg)(Class, SEL, SEL) = (typeof(msg))objc_msgSend;
     bool resolved = msg(cls, resolve_sel, sel);
@@ -6242,8 +6252,10 @@ static void resolveInstanceMethod(id inst, SEL sel, Class cls)
     //缓存结果(好或坏)，这样解析器下次就不会触发。
     
     // +resolveInstanceMethod adds to self a.k.a. cls
+    //这个方法是用于查询自己的有没有实现，没有查找父类，一旦找到就插入缓存，包括存入 _objc_msgForward_impcache
     IMP imp = lookUpImpOrNilTryCache(inst, sel, cls);
 
+    //基本可以视为无用代码，因为没有具体逻辑都是打印
     if (resolved  &&  PrintResolving) {
         if (imp) {
             _objc_inform("RESOLVE: method %c[%s %s] "

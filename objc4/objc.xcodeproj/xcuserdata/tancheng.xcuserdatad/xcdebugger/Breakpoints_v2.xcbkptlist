@@ -8,7 +8,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
             uuid = "C4EBD40C-D988-4B6C-9038-CA6644A7745C"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "runtime/Messengers.subproj/objc-msg-x86_64.s"
@@ -39,70 +39,6 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "55FE0610-F38D-4AD2-9E09-CD77653D5A0D"
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "runtime/objc-runtime-new.mm"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6375"
-            endingLineNumber = "6375"
-            landmarkName = "_lookUpImpTryCache(inst, sel, cls, behavior)"
-            landmarkType = "9">
-            <Locations>
-               <Location
-                  uuid = "55FE0610-F38D-4AD2-9E09-CD77653D5A0D - 690c62495373543e"
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "lookUpImpOrForwardTryCache"
-                  moduleName = "libobjc.A.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/tancheng/Documents/LogicV5.0/iOSMaster/objc_4_SourceCode/objc_SouceCode/objc_SouceCode/objc4/runtime/objc-runtime-new.mm"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "6372"
-                  endingLineNumber = "6372"
-                  offsetFromSymbolStart = "65">
-               </Location>
-               <Location
-                  uuid = "55FE0610-F38D-4AD2-9E09-CD77653D5A0D - 36fc27c3c8d855f0"
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "lookUpImpOrNilTryCache"
-                  moduleName = "libobjc.A.dylib"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/tancheng/Documents/LogicV5.0/iOSMaster/objc_4_SourceCode/objc_SouceCode/objc_SouceCode/objc4/runtime/objc-runtime-new.mm"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "6372"
-                  endingLineNumber = "6372"
-                  offsetFromSymbolStart = "68">
-               </Location>
-            </Locations>
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "20E0925D-D9A0-46BC-9E50-B1D6D1E92672"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "KCObjcBuild/Msg_Forward/Msg_Forward_Class.m"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "32"
-            endingLineNumber = "32"
-            landmarkName = "-abc"
-            landmarkType = "7">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
             uuid = "26499DE7-1780-4840-A192-63C1BD04D87D"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
@@ -120,7 +56,7 @@
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
             uuid = "CE4C00C0-93FE-4C63-A7B8-C6889165A388"
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "runtime/objc-runtime.mm"
@@ -135,15 +71,31 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "D1CF8448-11EB-4AA8-B355-B01CCF99D224"
+            uuid = "4EA55309-7CC6-4B2F-836B-8F3907E48E2A"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "runtime/NSObject.mm"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "340"
+            endingLineNumber = "340"
+            landmarkName = "storeWeak(location, newObj)"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "D38005D4-7E96-4745-B863-3EB8B1B41546"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "runtime/objc-runtime-new.mm"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6568"
-            endingLineNumber = "6568"
+            startingLineNumber = "6538"
+            endingLineNumber = "6538"
             landmarkName = "lookUpImpOrForward(inst, sel, cls, behavior)"
             landmarkType = "9">
          </BreakpointContent>
@@ -151,63 +103,88 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "BF7D72F5-DF2A-4A0B-BC58-61DEB56AE52F"
+            uuid = "94C45161-D4AE-4A79-98D3-4C66F3A01A6A"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "runtime/objc-runtime-new.mm"
+            filePath = "KCObjcBuild/Msg_Forward/Msg_Forward_Class.m"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6566"
-            endingLineNumber = "6566"
-            landmarkName = "lookUpImpOrForward(inst, sel, cls, behavior)"
-            landmarkType = "9">
+            startingLineNumber = "37"
+            endingLineNumber = "37"
+            landmarkName = "-abc"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            uuid = "7391EBDD-0EB9-4022-A720-F0F323D6D49E"
+            uuid = "60396570-D1E7-4386-BDF6-F6679A3698E3"
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "runtime/objc-runtime-new.mm"
+            filePath = "KCObjcBuild/Msg_Forward/Msg_Forward_Class.m"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6392"
-            endingLineNumber = "6392"
-            landmarkName = "_lookUpImpTryCache(inst, sel, cls, behavior)"
-            landmarkType = "9">
+            startingLineNumber = "32"
+            endingLineNumber = "32"
+            landmarkName = "-forwardingTargetForSelector:"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.AddressBreakpoint">
+         <BreakpointContent
+            uuid = "759CA154-9EAF-499E-8DE4-5348237B3B95"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            symbolName = "*0x7fff2042b4ac">
             <Locations>
                <Location
-                  uuid = "7391EBDD-0EB9-4022-A720-F0F323D6D49E - 690c624953735a0f"
                   shouldBeEnabled = "Yes"
                   ignoreCount = "0"
                   continueAfterRunningActions = "No"
-                  symbolName = "lookUpImpOrForwardTryCache"
-                  moduleName = "libobjc.A.dylib"
                   usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/tancheng/Documents/LogicV5.0/iOSMaster/objc_4_SourceCode/objc_SouceCode/objc_SouceCode/objc4/runtime/objc-runtime-new.mm"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "6389"
-                  endingLineNumber = "6389"
-                  offsetFromSymbolStart = "203">
+                  offsetFromSymbolStart = "0">
                </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.AddressBreakpoint">
+         <BreakpointContent
+            uuid = "5B2AB1E6-32FF-4D64-8C04-1FCFA9AE95AD"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            symbolName = "*0x7fff2042b3a0">
+            <Locations>
                <Location
-                  uuid = "7391EBDD-0EB9-4022-A720-F0F323D6D49E - 36fc27c3c8d85bc1"
                   shouldBeEnabled = "Yes"
                   ignoreCount = "0"
                   continueAfterRunningActions = "No"
-                  symbolName = "lookUpImpOrNilTryCache"
-                  moduleName = "libobjc.A.dylib"
                   usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/tancheng/Documents/LogicV5.0/iOSMaster/objc_4_SourceCode/objc_SouceCode/objc_SouceCode/objc4/runtime/objc-runtime-new.mm"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "6389"
-                  endingLineNumber = "6389"
-                  offsetFromSymbolStart = "206">
+                  offsetFromSymbolStart = "0">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.AddressBreakpoint">
+         <BreakpointContent
+            uuid = "54358957-4A7F-40EC-ABA6-5B2A9278492F"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            symbolName = "*0x7fff2042b413">
+            <Locations>
+               <Location
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  usesParentBreakpointCondition = "Yes"
+                  offsetFromSymbolStart = "0">
                </Location>
             </Locations>
          </BreakpointContent>

@@ -19,6 +19,7 @@ int main(int argc, const char * argv[]) {
         // insert code here...
         Msg_Forward_Class *objc = [[Msg_Forward_Class alloc] init];
         [objc abc];
+
     }
     return 0;
 }

@@ -27,6 +27,11 @@
 //    return [super resolveInstanceMethod:sel];
 //}
 
+- (id)forwardingTargetForSelector:(SEL)aSelector
+{
+    return [super forwardingTargetForSelector:aSelector];
+}
+
 - (void)abc
 {
     Msg_Forward_Class *objc = [[Msg_Forward_Class alloc] init];
