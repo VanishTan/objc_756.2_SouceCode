@@ -6231,6 +6231,7 @@ static void resolveInstanceMethod(id inst, SEL sel, Class cls)
 
     if (!lookUpImpOrNilTryCache(cls, resolve_sel, cls->ISA(/*authenticated*/true))) {
         // Resolver not implemented.
+        // 解析器未实现。
         return;
     }
 
@@ -6238,6 +6239,8 @@ static void resolveInstanceMethod(id inst, SEL sel, Class cls)
     bool resolved = msg(cls, resolve_sel, sel);
 
     // Cache the result (good or bad) so the resolver doesn't fire next time.
+    //缓存结果(好或坏)，这样解析器下次就不会触发。
+    
     // +resolveInstanceMethod adds to self a.k.a. cls
     IMP imp = lookUpImpOrNilTryCache(inst, sel, cls);
 
@@ -6403,9 +6406,6 @@ IMP lookUpImpOrNilTryCache(id inst, SEL sel, Class cls, int behavior)
 /**
  * lookUpImpOrForward。
  * 标准IMP查找。
- * initialize==NO 尝试避免+初始化(但有时会失败)
- * cache==NO 跳过乐观解锁查找(但在其他地方使用缓存)
- * 大多数调用者应该使用initialize==YES和cache==YES。
  * inst是cls或其子类的一个实例，如果不知道，则为nil。
  * 如果cls是一个未初始化的元类，那么非空的inst会更快。
  * 可能返回_objc_msgForward_impcache。用于外部使用的imp必须转换为_objc_msgForward或_objc_msgForward_stret。
@@ -6473,9 +6473,12 @@ IMP lookUpImpOrForward(id inst, SEL sel, Class cls, int behavior)
     // The code used to lookup the class's cache again right after
     // we take the lock but for the vast majority of the cases
     // evidence shows this is a miss most of the time, hence a time loss.
+    //获取锁后，代码再次查找类的缓存，但绝大多数情况下，证据显示大多数情况下这是一个遗漏，因此时间损失。
+    
     //
     // The only codepath calling into this without having performed some
     // kind of cache lookup is class_getInstanceMethod().
+    //唯一没有执行某种缓存查找的代码路径是class_getInstanceMethod()。
 
     for (unsigned attempts = unreasonableClassCount();;) {
         if (curClass->cache.isConstantOptimizedCache(/* strict */true)) {

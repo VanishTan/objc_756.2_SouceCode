@@ -44,8 +44,10 @@
 
 /* Begin PBXBuildFile section */
 		0466411525A4991B002440A8 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 0466411425A4991B002440A8 /* main.m */; };
+		2D4302C425E503E40002A00F /* Msg_Forward_Class.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D4302C325E503E40002A00F /* Msg_Forward_Class.m */; };
+		2D4302D625E5041E0002A00F /* Objc_Weak_Class.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D4302D525E5041E0002A00F /* Objc_Weak_Class.m */; };
+		2D4302EE25E51DA70002A00F /* NSObject+FixMethodCrash.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D4302EC25E51DA70002A00F /* NSObject+FixMethodCrash.m */; };
 		2D6DE23E25C9469C00A97330 /* TestSuperClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23725C9469C00A97330 /* TestSuperClass.m */; };
-		2D6DE23F25C9469C00A97330 /* NSObject+FixMethodCrash.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23B25C9469C00A97330 /* NSObject+FixMethodCrash.m */; };
 		2D6DE24025C9469C00A97330 /* TestClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23C25C9469C00A97330 /* TestClass.m */; };
 		393CEAC00DC69E3E000B69DE /* objc-references.mm in Sources */ = {isa = PBXBuildFile; fileRef = 393CEABF0DC69E3E000B69DE /* objc-references.mm */; };
 		393CEAC60DC69E67000B69DE /* objc-references.h in Headers */ = {isa = PBXBuildFile; fileRef = 393CEAC50DC69E67000B69DE /* objc-references.h */; };
@@ -225,10 +227,14 @@
 /* Begin PBXFileReference section */
 		0466411225A4991B002440A8 /* KCObjcBuild */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = KCObjcBuild; sourceTree = BUILT_PRODUCTS_DIR; };
 		0466411425A4991B002440A8 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		2D4302C225E503E40002A00F /* Msg_Forward_Class.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Msg_Forward_Class.h; sourceTree = "<group>"; };
+		2D4302C325E503E40002A00F /* Msg_Forward_Class.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Msg_Forward_Class.m; sourceTree = "<group>"; };
+		2D4302D425E5041E0002A00F /* Objc_Weak_Class.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Objc_Weak_Class.h; sourceTree = "<group>"; };
+		2D4302D525E5041E0002A00F /* Objc_Weak_Class.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Objc_Weak_Class.m; sourceTree = "<group>"; };
+		2D4302EC25E51DA70002A00F /* NSObject+FixMethodCrash.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSObject+FixMethodCrash.m"; sourceTree = "<group>"; };
+		2D4302ED25E51DA70002A00F /* NSObject+FixMethodCrash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSObject+FixMethodCrash.h"; sourceTree = "<group>"; };
 		2D6DE23725C9469C00A97330 /* TestSuperClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestSuperClass.m; sourceTree = "<group>"; };
 		2D6DE23825C9469C00A97330 /* TestSuperClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestSuperClass.h; sourceTree = "<group>"; };
-		2D6DE23A25C9469C00A97330 /* NSObject+FixMethodCrash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSObject+FixMethodCrash.h"; sourceTree = "<group>"; };
-		2D6DE23B25C9469C00A97330 /* NSObject+FixMethodCrash.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSObject+FixMethodCrash.m"; sourceTree = "<group>"; };
 		2D6DE23C25C9469C00A97330 /* TestClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestClass.m; sourceTree = "<group>"; };
 		2D6DE23D25C9469C00A97330 /* TestClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestClass.h; sourceTree = "<group>"; };
 		393CEABF0DC69E3E000B69DE /* objc-references.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = "objc-references.mm"; path = "runtime/objc-references.mm"; sourceTree = "<group>"; };
@@ -399,6 +405,8 @@
 				2D6DE23C25C9469C00A97330 /* TestClass.m */,
 				2D6DE23825C9469C00A97330 /* TestSuperClass.h */,
 				2D6DE23725C9469C00A97330 /* TestSuperClass.m */,
+				2D4302D325E504000002A00F /* Objc_Weak */,
+				2D4302C125E503C30002A00F /* Msg_Forward */,
 				2D6DE23925C9469C00A97330 /* CrashFix */,
 			);
 			path = KCObjcBuild;
@@ -488,11 +496,29 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		2D4302C125E503C30002A00F /* Msg_Forward */ = {
+			isa = PBXGroup;
+			children = (
+				2D4302C225E503E40002A00F /* Msg_Forward_Class.h */,
+				2D4302C325E503E40002A00F /* Msg_Forward_Class.m */,
+			);
+			path = Msg_Forward;
+			sourceTree = "<group>";
+		};
+		2D4302D325E504000002A00F /* Objc_Weak */ = {
+			isa = PBXGroup;
+			children = (
+				2D4302D425E5041E0002A00F /* Objc_Weak_Class.h */,
+				2D4302D525E5041E0002A00F /* Objc_Weak_Class.m */,
+			);
+			path = Objc_Weak;
+			sourceTree = "<group>";
+		};
 		2D6DE23925C9469C00A97330 /* CrashFix */ = {
 			isa = PBXGroup;
 			children = (
-				2D6DE23A25C9469C00A97330 /* NSObject+FixMethodCrash.h */,
-				2D6DE23B25C9469C00A97330 /* NSObject+FixMethodCrash.m */,
+				2D4302ED25E51DA70002A00F /* NSObject+FixMethodCrash.h */,
+				2D4302EC25E51DA70002A00F /* NSObject+FixMethodCrash.m */,
 			);
 			path = CrashFix;
 			sourceTree = "<group>";
@@ -890,10 +916,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2D4302EE25E51DA70002A00F /* NSObject+FixMethodCrash.m in Sources */,
+				2D4302D625E5041E0002A00F /* Objc_Weak_Class.m in Sources */,
 				2D6DE24025C9469C00A97330 /* TestClass.m in Sources */,
-				2D6DE23F25C9469C00A97330 /* NSObject+FixMethodCrash.m in Sources */,
 				2D6DE23E25C9469C00A97330 /* TestSuperClass.m in Sources */,
 				0466411525A4991B002440A8 /* main.m in Sources */,
+				2D4302C425E503E40002A00F /* Msg_Forward_Class.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
