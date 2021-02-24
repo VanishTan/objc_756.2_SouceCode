@@ -46,8 +46,8 @@
             filePath = "runtime/objc-runtime-new.mm"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6372"
-            endingLineNumber = "6372"
+            startingLineNumber = "6375"
+            endingLineNumber = "6375"
             landmarkName = "_lookUpImpTryCache(inst, sel, cls, behavior)"
             landmarkType = "9">
             <Locations>
@@ -142,8 +142,8 @@
             filePath = "runtime/objc-runtime-new.mm"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6565"
-            endingLineNumber = "6565"
+            startingLineNumber = "6568"
+            endingLineNumber = "6568"
             landmarkName = "lookUpImpOrForward(inst, sel, cls, behavior)"
             landmarkType = "9">
          </BreakpointContent>
@@ -158,24 +158,8 @@
             filePath = "runtime/objc-runtime-new.mm"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6563"
-            endingLineNumber = "6563"
-            landmarkName = "lookUpImpOrForward(inst, sel, cls, behavior)"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            uuid = "69725C75-EACF-44B9-8840-B636728973B2"
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "runtime/objc-runtime-new.mm"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6547"
-            endingLineNumber = "6547"
+            startingLineNumber = "6566"
+            endingLineNumber = "6566"
             landmarkName = "lookUpImpOrForward(inst, sel, cls, behavior)"
             landmarkType = "9">
          </BreakpointContent>
@@ -190,8 +174,8 @@
             filePath = "runtime/objc-runtime-new.mm"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "6389"
-            endingLineNumber = "6389"
+            startingLineNumber = "6392"
+            endingLineNumber = "6392"
             landmarkName = "_lookUpImpTryCache(inst, sel, cls, behavior)"
             landmarkType = "9">
             <Locations>

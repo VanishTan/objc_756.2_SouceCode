@@ -6280,11 +6280,13 @@ resolveMethod_locked(id inst, SEL sel, Class cls, int behavior)
 
     if (! cls->isMetaClass()) {
         // try [cls resolveInstanceMethod:sel]
+        //对象方法的消息转发
         resolveInstanceMethod(inst, sel, cls);
     } 
     else {
         // try [nonMetaClass resolveClassMethod:sel]
         // and [cls resolveInstanceMethod:sel]
+        //类方法的消息转发
         resolveClassMethod(inst, sel, cls);
         if (!lookUpImpOrNilTryCache(inst, sel, cls)) {
             resolveInstanceMethod(inst, sel, cls);
@@ -6293,6 +6295,7 @@ resolveMethod_locked(id inst, SEL sel, Class cls, int behavior)
 
     // chances are that calling the resolver have populated the cache
     // so attempt using it
+    //可能调用解析器已经填充了缓存，所以尝试使用它
     return lookUpImpOrForwardTryCache(inst, sel, cls, behavior);
 }
 
