@@ -336,7 +336,10 @@ template <HaveOld haveOld, HaveNew haveNew,
 static id 
 storeWeak(id *location, objc_object *newObj)
 {
+    //检查新旧对象必须存在一个
     ASSERT(haveOld  ||  haveNew);
+    
+    //如果 haveNew == NO,判断是否 newObj != nil 崩溃
     if (!haveNew) ASSERT(newObj == nil);
 
     Class previouslyInitializedClass = nil;
@@ -352,6 +355,7 @@ storeWeak(id *location, objc_object *newObj)
     //如果旧值在我们下面改变，请重试。
  retry:
     if (haveOld) {
+        //取出旧值
         oldObj = *location;
         
         //这里的 & 是引用的意思 "[oldObj]" 是对 '[]'的重载
@@ -361,13 +365,16 @@ storeWeak(id *location, objc_object *newObj)
         oldTable = nil;
     }
     if (haveNew) {
+        //取出新对象的散列表
         newTable = &SideTables()[newObj];
     } else {
         newTable = nil;
     }
 
+    //散列表加锁
     SideTable::lockTwo<haveOld, haveNew>(oldTable, newTable);
 
+    //如果有旧值，但是 *location != oldObj 代表可能有其他线程修改了，就从头来
     if (haveOld  &&  *location != oldObj) {
         SideTable::unlockTwo<haveOld, haveNew>(oldTable, newTable);
         goto retry;
@@ -381,6 +388,8 @@ storeWeak(id *location, objc_object *newObj)
     
     if (haveNew  &&  newObj) {
         Class cls = newObj->getIsa();
+        
+        //如果没有初始化类，就初始化，容错代码
         if (cls != previouslyInitializedClass  &&  
             !((objc_class *)cls)->isInitialized()) 
         {
@@ -395,6 +404,7 @@ storeWeak(id *location, objc_object *newObj)
             // Instead set previouslyInitializedClass to recognize it on retry.
             previouslyInitializedClass = cls;
 
+            //从头再走
             goto retry;
         }
     }
@@ -409,6 +419,8 @@ storeWeak(id *location, objc_object *newObj)
     // Assign new value, if any.
     //分配新值(如果有的话)
     if (haveNew) {
+        
+        //注册新值得弱引用
         newObj = (objc_object *)
             weak_register_no_lock(&newTable->weak_table, (id)newObj, location, 
                                   crashIfDeallocating ? CrashIfDeallocating : ReturnNilIfDeallocating);
@@ -416,6 +428,7 @@ storeWeak(id *location, objc_object *newObj)
 
         // Set is-weakly-referenced bit in refcount table.
         if (!newObj->isTaggedPointerOrNil()) {
+            //设置 obj 中 isa.weakly_referenced = true; 代表有弱引用
             newObj->setWeaklyReferenced_nolock();
         }
 
