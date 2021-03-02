@@ -78,30 +78,44 @@ typedef DisguisedPtr<objc_object *> weak_referrer_t;
 #define REFERRERS_OUT_OF_LINE 2
 
 struct weak_entry_t {
+    
+    //弱引用对象
     DisguisedPtr<objc_object> referent;
+    
+    //联合体，公用一块内存
     union {
+        
+        //弱引用数组 weak_referrer_t 大于 4用这个
         struct {
+            //弱引用数组
             weak_referrer_t *referrers;
             uintptr_t        out_of_line_ness : 2;
-            uintptr_t        num_refs : PTR_MINUS_2;
+            uintptr_t        num_refs : PTR_MINUS_2; //引用数量
             uintptr_t        mask;
-            uintptr_t        max_hash_displacement;
+            uintptr_t        max_hash_displacement; //最大哈希冲突值
         };
+        
+        //WEAK_INLINE_COUNT : 4
+        //弱引用数组 weak_referrer_t 小于等于 4用这个
         struct {
             // out_of_line_ness field is low bits of inline_referrers[1]
             weak_referrer_t  inline_referrers[WEAK_INLINE_COUNT];
         };
     };
 
+    //判断是否是用的 referrers 来存储弱引用指针
     bool out_of_line() {
         return (out_of_line_ness == REFERRERS_OUT_OF_LINE);
     }
 
+    //memcpy 复制内存指针方法
+    //覆盖老数据
     weak_entry_t& operator=(const weak_entry_t& other) {
         memcpy(this, &other, sizeof(other));
         return *this;
     }
 
+    //构造方法
     weak_entry_t(objc_object *newReferent, objc_object **newReferrer)
         : referent(newReferent)
     {

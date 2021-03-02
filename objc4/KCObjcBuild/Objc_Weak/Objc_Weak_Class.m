@@ -11,12 +11,12 @@
 
 - (void)weakMethod
 {
-    __weak id weakPtr;
     
     Objc_Weak_Class *o = [[Objc_Weak_Class alloc] init];
-    weakPtr = o;
+    __weak Objc_Weak_Class *weakPtr = o;
+    weakPtr.delegate = @"1";
     
-    NSLog(@"%d",o);
+    NSLog(@" %@",o);
 }
 
 

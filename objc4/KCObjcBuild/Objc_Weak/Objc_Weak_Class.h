@@ -11,6 +11,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface Objc_Weak_Class : NSObject
 
+@property (atomic, strong) id delegate;
+
 - (void)weakMethod;
 
 @end

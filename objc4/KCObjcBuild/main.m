@@ -10,6 +10,7 @@
 #import <objc/message.h>
 #import "TestSuperClass.h"
 #import "Msg_Forward_Class.h"
+#import "Objc_Weak_Class.h"
 
 
 
@@ -17,8 +18,12 @@
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
         // insert code here...
-        Msg_Forward_Class *objc = [[Msg_Forward_Class alloc] init];
-        [objc abc];
+        
+        Objc_Weak_Class *objc = [[Objc_Weak_Class alloc] init];
+        [objc weakMethod];
+        
+//        Msg_Forward_Class *objc = [[Msg_Forward_Class alloc] init];
+//        [objc abc];
 
     }
     return 0;
