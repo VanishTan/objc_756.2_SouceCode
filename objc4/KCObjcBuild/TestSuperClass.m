@@ -9,8 +9,13 @@
 
 @implementation TestSuperClass
 
++ (void)load
+{
+
+}
+
 - (void)superClassInstanceMethod {
-    NSLog(@"%s",__func__);
+//    NSLog(@"%s",__func__);
 }
 + (void)superClassClassMethod {
     NSLog(@"%s",__func__);

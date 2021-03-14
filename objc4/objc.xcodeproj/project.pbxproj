@@ -49,6 +49,7 @@
 		2D4302EE25E51DA70002A00F /* NSObject+FixMethodCrash.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D4302EC25E51DA70002A00F /* NSObject+FixMethodCrash.m */; };
 		2D6DE23E25C9469C00A97330 /* TestSuperClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23725C9469C00A97330 /* TestSuperClass.m */; };
 		2D6DE24025C9469C00A97330 /* TestClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6DE23C25C9469C00A97330 /* TestClass.m */; };
+		2D7A33E025FDC4FB00A654C7 /* TestSuperClass+Category.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D7A33DF25FDC4FB00A654C7 /* TestSuperClass+Category.m */; };
 		393CEAC00DC69E3E000B69DE /* objc-references.mm in Sources */ = {isa = PBXBuildFile; fileRef = 393CEABF0DC69E3E000B69DE /* objc-references.mm */; };
 		393CEAC60DC69E67000B69DE /* objc-references.h in Headers */ = {isa = PBXBuildFile; fileRef = 393CEAC50DC69E67000B69DE /* objc-references.h */; };
 		39ABD72312F0B61800D1054C /* objc-weak.h in Headers */ = {isa = PBXBuildFile; fileRef = 39ABD71F12F0B61800D1054C /* objc-weak.h */; };
@@ -237,6 +238,8 @@
 		2D6DE23825C9469C00A97330 /* TestSuperClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestSuperClass.h; sourceTree = "<group>"; };
 		2D6DE23C25C9469C00A97330 /* TestClass.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TestClass.m; sourceTree = "<group>"; };
 		2D6DE23D25C9469C00A97330 /* TestClass.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TestClass.h; sourceTree = "<group>"; };
+		2D7A33DE25FDC4FB00A654C7 /* TestSuperClass+Category.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TestSuperClass+Category.h"; sourceTree = "<group>"; };
+		2D7A33DF25FDC4FB00A654C7 /* TestSuperClass+Category.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "TestSuperClass+Category.m"; sourceTree = "<group>"; };
 		393CEABF0DC69E3E000B69DE /* objc-references.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = "objc-references.mm"; path = "runtime/objc-references.mm"; sourceTree = "<group>"; };
 		393CEAC50DC69E67000B69DE /* objc-references.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-references.h"; path = "runtime/objc-references.h"; sourceTree = "<group>"; };
 		39ABD71F12F0B61800D1054C /* objc-weak.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = "objc-weak.h"; path = "runtime/objc-weak.h"; sourceTree = "<group>"; };
@@ -405,6 +408,8 @@
 				2D6DE23C25C9469C00A97330 /* TestClass.m */,
 				2D6DE23825C9469C00A97330 /* TestSuperClass.h */,
 				2D6DE23725C9469C00A97330 /* TestSuperClass.m */,
+				2D7A33DE25FDC4FB00A654C7 /* TestSuperClass+Category.h */,
+				2D7A33DF25FDC4FB00A654C7 /* TestSuperClass+Category.m */,
 				2D4302D325E504000002A00F /* Objc_Weak */,
 				2D4302C125E503C30002A00F /* Msg_Forward */,
 				2D6DE23925C9469C00A97330 /* CrashFix */,
@@ -918,6 +923,7 @@
 			files = (
 				2D4302EE25E51DA70002A00F /* NSObject+FixMethodCrash.m in Sources */,
 				2D4302D625E5041E0002A00F /* Objc_Weak_Class.m in Sources */,
+				2D7A33E025FDC4FB00A654C7 /* TestSuperClass+Category.m in Sources */,
 				2D6DE24025C9469C00A97330 /* TestClass.m in Sources */,
 				2D6DE23E25C9469C00A97330 /* TestSuperClass.m in Sources */,
 				0466411525A4991B002440A8 /* main.m in Sources */,

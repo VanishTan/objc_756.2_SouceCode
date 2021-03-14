@@ -1344,7 +1344,7 @@ class_rw_ext_t *
 class_rw_t::extAlloc(const class_ro_t *ro, bool deepCopy)
 {
     runtimeLock.assertLocked();
-
+    
     auto rwe = objc::zalloc<class_rw_ext_t>();
 
     rwe->version = (ro->flags & RO_META) ? 7 : 0;
@@ -1410,6 +1410,8 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
     uint32_t protocount = 0;
     bool fromBundle = NO;
     bool isMeta = (flags & ATTACH_METACLASS);
+    
+    // 初始化 rwe
     auto rwe = cls->data()->extAllocIfNeeded();
 
     for (uint32_t i = 0; i < cats_count; i++) {
@@ -1419,6 +1421,8 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
         if (mlist) {
             if (mcount == ATTACH_BUFSIZ) {
                 prepareMethodLists(cls, mlists, mcount, NO, fromBundle, __func__);
+                
+                // rwe 调用 attachLists 添加方法
                 rwe->methods.attachLists(mlists, mcount);
                 mcount = 0;
             }
@@ -1426,6 +1430,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
             fromBundle |= entry.hi->isBundle();
         }
 
+        // 添加属性
         property_list_t *proplist =
             entry.cat->propertiesForMeta(isMeta, entry.hi);
         if (proplist) {
@@ -1436,6 +1441,7 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
             proplists[ATTACH_BUFSIZ - ++propcount] = proplist;
         }
 
+        // 添加协议
         protocol_list_t *protolist = entry.cat->protocolsForMeta(isMeta);
         if (protolist) {
             if (protocount == ATTACH_BUFSIZ) {
@@ -1447,8 +1453,10 @@ attachCategories(Class cls, const locstamped_category_t *cats_list, uint32_t cat
     }
 
     if (mcount > 0) {
+        // 排序
         prepareMethodLists(cls, mlists + ATTACH_BUFSIZ - mcount, mcount,
                            NO, fromBundle, __func__);
+        // 进行内存平移操作
         rwe->methods.attachLists(mlists + ATTACH_BUFSIZ - mcount, mcount);
         if (flags & ATTACH_EXISTING) {
             flushCaches(cls, __func__, [](Class c){
@@ -1510,7 +1518,7 @@ static void methodizeClass(Class cls, Class previously)
         addMethod(cls, @selector(initialize), (IMP)&objc_noop_imp, "", NO);
     }
 
-    // Attach categories.
+    // Attach categories. //分类的加载
     if (previously) {
         if (isMeta) {
             objc::unattachedCategories.attachToClass(cls, previously,
@@ -2630,44 +2638,46 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
         cls->changeInfo(RW_REALIZED|RW_REALIZING, RW_FUTURE);
     } else {
         // Normal class. Allocate writeable class data.
+        
+        //开辟空间
         rw = objc::zalloc<class_rw_t>();
+        
+        //把 ro 给 rw
         rw->set_ro(ro);
+        
+        // 类已经开始实现但还没有完成它
         rw->flags = RW_REALIZED|RW_REALIZING|isMeta;
+        
+        // 给类的data.bits 赋值
         cls->setData(rw);
     }
 
+    //初始化为空或在伪装中预优化
     cls->cache.initializeToEmptyOrPreoptimizedInDisguise();
 
 #if FAST_CACHE_META
+    // 非正规化的RO_META，以避免间接
     if (isMeta) cls->cache.setBit(FAST_CACHE_META);
 #endif
 
     // Choose an index for this class.
     // Sets cls->instancesRequireRawIsa if indexes no more indexes are available
+    
+    // 为类选择索引。
     cls->chooseClassArrayIndex();
 
-    if (PrintConnecting) {
-        _objc_inform("CLASS: realizing class '%s'%s %p %p #%u %s%s",
-                     cls->nameForLogging(), isMeta ? " (meta)" : "", 
-                     (void*)cls, ro, cls->classArrayIndex(),
-                     cls->isSwiftStable() ? "(swift)" : "",
-                     cls->isSwiftLegacy() ? "(pre-stable swift)" : "");
-    }
-
-    // Realize superclass and metaclass, if they aren't already.
-    // This needs to be done after RW_REALIZED is set above, for root classes.
-    // This needs to be done after class index is chosen, for root metaclasses.
-    // This assumes that none of those classes have Swift contents,
-    //   or that Swift's initializers have already been called.
-    //   fixme that assumption will be wrong if we add support
-    //   for ObjC subclasses of Swift classes.
+    // 初始化父类
     supercls = realizeClassWithoutSwift(remapClass(cls->getSuperclass()), nil);
+    
+    // 初始化元类
     metacls = realizeClassWithoutSwift(remapClass(cls->ISA()), nil);
 
 #if SUPPORT_NONPOINTER_ISA
     if (isMeta) {
         // Metaclasses do not need any features from non pointer ISA
         // This allows for a faspath for classes in objc_retain/objc_release.
+        
+        // 元类不需要任何来自非指针ISA的特性
         cls->setInstancesRequireRawIsa();
     } else {
         // Disable non-pointer isa for some classes and/or platforms.
@@ -2698,6 +2708,7 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
         }
 
         if (instancesRequireRawIsa) {
+            // 将这个类及其所有子类标记为需要原始isa指针
             cls->setInstancesRequireRawIsaRecursively(rawIsaIsInherited);
         }
     }
@@ -2705,14 +2716,23 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
 #endif
 
     // Update superclass and metaclass in case of remapping
+    
+    // 设置父类
     cls->setSuperclass(supercls);
+    
+    // 初始化isa
     cls->initClassIsa(metacls);
 
     // Reconcile instance variable offsets / layout.
+    // 调和实例变量的偏移量。
+    
     // This may reallocate class_ro_t, updating our ro variable.
+    // 可以重新分配class_ro_t，更新ro变量。
+    
     if (supercls  &&  !isMeta) reconcileInstanceVariables(cls, supercls, ro);
 
     // Set fastInstanceSize if it wasn't set already.
+    // 如果还没有设置fastInstanceSize，则设置它。
     cls->setInstanceSize(ro->instanceSize);
 
     // Copy some flags from ro to rw
@@ -2725,6 +2745,8 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
     
     // Propagate the associated objects forbidden flag from ro or from
     // the superclass.
+    
+    //从ro或超类传播相关的对象禁用标志
     if ((ro->flags & RO_FORBIDS_ASSOCIATED_OBJECTS) ||
         (supercls && supercls->forbidsAssociatedObjects()))
     {
@@ -2739,6 +2761,7 @@ static Class realizeClassWithoutSwift(Class cls, Class previously)
     }
 
     // Attach categories
+    // 加载分类
     methodizeClass(cls, previously);
 
     return cls;
@@ -3362,7 +3385,7 @@ Class readClass(Class cls, bool headerIsBundle, bool headerIsPreoptimized)
             // so that newCls gets the correct signatures.
             newCls->setSuperclass(cls->getSuperclass());
             newCls->initIsa(cls->getIsa());
-
+ 
             rw->set_ro((class_ro_t *)newCls->data());
             newCls->setData(rw);
             freeIfMutable((char *)old_ro->getName());
@@ -3381,7 +3404,7 @@ Class readClass(Class cls, bool headerIsBundle, bool headerIsPreoptimized)
         // ASSERT(cls == getClass(name));
         ASSERT(mangledName == nullptr || getClassExceptSomeSwift(mangledName));
     } else {
-        if (mangledName) { //some Swift generic classes can lazily generate their names
+        if (mangledName) { //some Swift generic classes can lazily generate their names //一些快速的泛型类可以惰性地生成它们的名称
             addNamedClass(cls, mangledName, replacing);
         } else {
             Class meta = cls->ISA();
@@ -3585,6 +3608,8 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
         // 4/3 is NXMapTable's load factor
         int namedClassesSize = 
             (isPreoptimized() ? unoptimizedTotalClasses : totalClasses) * 4 / 3;
+        
+        /// 创建哈希表
         gdb_objc_realized_classes =
             NXCreateMapTable(NXStrValueMapPrototype, namedClassesSize);
 
@@ -3739,6 +3764,11 @@ void _read_images(header_info **hList, uint32_t hCount, int totalClasses, int un
     // attachment has been done. For categories present at startup,
     // discovery is deferred until the first load_images call after
     // the call to _dyld_objc_notify_register completes. rdar://problem/53119145
+    
+    
+    // 发现类别。只有在完成了初始的类别附件后才能这样做。
+    // 对于在启动时出现的类别，发现延迟到对_dyld_objc_notify_register的调用完成后的第一次load_images调用。
+    // rdar: / /问题/ 53119145
     if (didInitialAttachCategories) {
         for (EACH_HEADER) {
             load_categories_nolock(hi);

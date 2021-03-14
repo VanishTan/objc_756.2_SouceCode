@@ -5,25 +5,28 @@
 //  Created by Cooci on 2019/10/9.
 //
 #import <Foundation/Foundation.h>
-#import "TestClass.h"
-#import <objc/runtime.h>
-#import <objc/message.h>
-#import "TestSuperClass.h"
-#import "Msg_Forward_Class.h"
-#import "Objc_Weak_Class.h"
-
+//#import "TestClass.h"
+//#import <objc/runtime.h>
+//#import <objc/message.h>
+//#import "TestSuperClass.h"
+//#import "Msg_Forward_Class.h"
+//#import "Objc_Weak_Class.h"
+#import "TestSuperClass+Category.h"
 
 
 
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
         // insert code here...
-        
-        Objc_Weak_Class *objc = [[Objc_Weak_Class alloc] init];
-        [objc weakMethod];
+//        
+//        Objc_Weak_Class *objc = [[Objc_Weak_Class alloc] init];
+//        [objc weakMethod];
         
 //        Msg_Forward_Class *objc = [[Msg_Forward_Class alloc] init];
 //        [objc abc];
+        
+        TestSuperClass *objc = [TestSuperClass new];
+        [objc category_TestSuperClass];
 
     }
     return 0;

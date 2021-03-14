@@ -11,6 +11,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TestSuperClass : NSObject
 
+@property (nonatomic, strong) NSString *test;
+
 - (void)superClassInstanceMethod;
 + (void)superClassClassMethod;
 
